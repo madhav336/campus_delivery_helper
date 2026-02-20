@@ -1,11 +1,13 @@
 import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import { useState } from "react";
-import { useRouter } from "expo-router";
-import { createRequest } from "@/services/api";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { updateRequest } from "@/services/api";
 
-export default function CreateScreen() {
+export default function EditScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const id = params.id as string;
 
   const [item, setItem] = useState("");
   const [outlet, setOutlet] = useState("");
@@ -13,44 +15,30 @@ export default function CreateScreen() {
   const [hostel, setHostel] = useState("");
   const [fee, setFee] = useState("");
 
-  const itemError = item.trim() === "";
-  const outletError =
-    outlet === "" || (outlet === "Other" && customOutlet.trim() === "");
-  const hostelError = hostel.trim() === "";
-  const feeError = Number(fee) <= 0;
+  useEffect(() => {
+    setItem((params.item as string) || "");
+    setOutlet((params.outlet as string) || "");
+    setHostel((params.hostel as string) || "");
+    setFee((params.fee as string) || "");
+  }, []);
 
-  const isValid =
-    !itemError && !outletError && !hostelError && !feeError;
+  const finalOutlet =
+    outlet === "Other" ? customOutlet : outlet;
 
-  const handleSubmit = async () => {
-    if (!isValid) return;
+  const handleUpdate = async () => {
+    await updateRequest(id, {
+      itemDescription: item,
+      outlet: finalOutlet,
+      hostel,
+      fee: Number(fee),
+    });
 
-    const finalOutlet =
-      outlet === "Other" ? customOutlet : outlet;
-
-    try {
-      await createRequest({
-        itemDescription: item,
-        outlet: finalOutlet,
-        hostel,
-        fee: Number(fee),
-      });
-
-      setItem("");
-      setOutlet("");
-      setCustomOutlet("");
-      setHostel("");
-      setFee("");
-
-      router.replace("/requests");
-    } catch (err) {
-      console.error("Create failed", err);
-    }
+    router.replace("/requests");
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Create Request</Text>
+      <Text style={styles.title}>Edit Request</Text>
 
       <TextInput
         placeholder="Item"
@@ -58,7 +46,6 @@ export default function CreateScreen() {
         onChangeText={setItem}
         style={styles.input}
       />
-      {itemError && <Text style={styles.errorText}>Item required</Text>}
 
       <TextInput
         placeholder="Hostel"
@@ -66,14 +53,12 @@ export default function CreateScreen() {
         onChangeText={setHostel}
         style={styles.input}
       />
-      {hostelError && <Text style={styles.errorText}>Hostel required</Text>}
 
       <Picker
         selectedValue={outlet}
         onValueChange={(value) => setOutlet(value)}
         style={styles.picker}
       >
-        <Picker.Item label="Select outlet" value="" />
         <Picker.Item label="ANC 1" value="ANC 1" />
         <Picker.Item label="ANC 2" value="ANC 2" />
         <Picker.Item label="CP" value="CP" />
@@ -96,14 +81,9 @@ export default function CreateScreen() {
         keyboardType="numeric"
         style={styles.input}
       />
-      {feeError && <Text style={styles.errorText}>Fee must be greater than 0</Text>}
 
-      <Pressable
-        onPress={handleSubmit}
-        disabled={!isValid}
-        style={[styles.button, !isValid && styles.disabledButton]}
-      >
-        <Text>Create</Text>
+      <Pressable onPress={handleUpdate} style={styles.button}>
+        <Text>Update</Text>
       </Pressable>
     </View>
   );
@@ -125,7 +105,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
   },
-  disabledButton: { opacity: 0.5 },
-  errorText: { color: "red", fontSize: 12, marginBottom: 8 },
-  picker: { borderWidth: 1, borderColor: "#ccc", marginBottom: 12 },
+  picker: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    marginBottom: 12,
+  },
 });

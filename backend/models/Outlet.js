@@ -5,11 +5,6 @@ const outletSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  type: {
-    type: String,
-    enum: ['CANTEEN', 'SHOP', 'CP'],
-    required: true
-  },
   locationDescription: {
     type: String,
     required: true
@@ -21,4 +16,3 @@ const outletSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('Outlet', outletSchema);
-

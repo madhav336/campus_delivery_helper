@@ -1,92 +1,147 @@
-import { View, Text, StyleSheet, Pressable, TextInput } from "react-native";
-import { useEffect, useState } from "react";
-import { getRequests } from "@/services/api";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  TextInput,
+  ScrollView,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useState } from "react";
+import { useRouter } from "expo-router";
+import { getRequests, deleteRequest } from "@/services/api";
 import { DeliveryRequest } from "@/types/deliveryRequest";
 import RequestCard from "@/components/RequestCard";
+import { ActivityIndicator, Alert } from "react-native";
 
 export default function RequestsScreen() {
+  const router = useRouter();
+
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"newest" | "fee">("newest");
   const [filterOutlet, setFilterOutlet] =
     useState<"ALL" | "ANC 1" | "ANC 2" | "CP" | "Other">("ALL");
-
   const [searchQuery, setSearchQuery] = useState("");
 
+  const loadRequests = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const data = await getRequests();
+      setRequests(data);
+    } catch {
+      setError("Failed to load requests");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-const searchedRequests = requests.filter((r) => {
-  const query = searchQuery.toLowerCase();
-  return (
-    r.item.toLowerCase().includes(query) ||
-    r.outlet.toLowerCase().includes(query)
-  );
-});
+  const handleDelete = async (id: string) => {
+    Alert.alert(
+      "Delete Request",
+      "Are you sure you want to delete this request?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteRequest(id);
+              await loadRequests();
+            } catch {
+              setError("Failed to delete request");
+            }
+          },
+        },
+      ]
+    );
+  };
 
-const filteredRequests =
-  filterOutlet === "ALL"
-    ? searchedRequests
-    : searchedRequests.filter((r) => r.outlet === filterOutlet);
-
-
-
-    const sortedRequests = [...filteredRequests].sort((a, b) => {
-      if (sortBy === "fee") {
-        return b.fee - a.fee;
-      }
-
-      return (
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
-      );
+  const handleEdit = (request: DeliveryRequest) => {
+    router.push({
+      pathname: "/edit/[id]",
+      params: {
+        id: request._id,
+        item: request.itemDescription,
+        outlet: request.outlet,
+        hostel: request.hostel,
+        fee: String(request.fee),
+      },
     });
+  };
 
-  useEffect(() => {
-    getRequests()
-      .then((data) => {
-        setRequests(data);
-      })
-      .catch(() => {
-        setError(true);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadRequests();
+    }, [])
+  );
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text>Loading requests...</Text>
+      <View style={styles.centered}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
+          <Text style={{ marginTop: 8 }}>Loading requests...</Text>
+        </View>
       </View>
     );
   }
+
   if (error) {
     return (
-      <View style={styles.container}>
+      <View style={styles.centered}>
         <Text style={styles.title}>Delivery Requests</Text>
-        <Text>Something went wrong. Please try again.</Text>
+        <Text>{error}</Text>
       </View>
     );
   }
-  if (requests.length === 0) {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Delivery Requests</Text>
-      <Text>No delivery requests yet.</Text>
-    </View>
-  );
-}
+
+  const searchedRequests = requests.filter((r) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      (r.itemDescription ?? "").toLowerCase().includes(query) ||
+      (r.outlet ?? "").toLowerCase().includes(query)
+    );
+  });
+
+  const filteredRequests =
+    filterOutlet === "ALL"
+      ? searchedRequests
+      : filterOutlet === "Other"
+      ? searchedRequests.filter(
+          (r) =>
+            r.outlet !== "ANC 1" &&
+            r.outlet !== "ANC 2" &&
+            r.outlet !== "CP"
+        )
+      : searchedRequests.filter((r) => r.outlet === filterOutlet);
+
+  const sortedRequests = [...filteredRequests].sort((a, b) => {
+    if (sortBy === "fee") return b.fee - a.fee;
+    return (
+      new Date(b.createdAt).getTime() -
+      new Date(a.createdAt).getTime()
+    );
+  });
+
   const groupedRequests = {
     "ANC 1": sortedRequests.filter((r) => r.outlet === "ANC 1"),
     "ANC 2": sortedRequests.filter((r) => r.outlet === "ANC 2"),
     CP: sortedRequests.filter((r) => r.outlet === "CP"),
-    Other: sortedRequests.filter((r) => r.outlet === "Other"),
+    Other: sortedRequests.filter(
+      (r) =>
+        r.outlet !== "ANC 1" &&
+        r.outlet !== "ANC 2" &&
+        r.outlet !== "CP"
+    ),
   };
 
-  
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
       <Text style={styles.title}>Delivery Requests</Text>
 
       <TextInput
@@ -96,13 +151,13 @@ const filteredRequests =
         style={styles.searchInput}
       />
 
-
+      {/* Sort Controls */}
       <View style={styles.sortControls}>
         <Pressable
           onPress={() => setSortBy("newest")}
           style={[
             styles.sortButton,
-            sortBy === "newest" && styles.activeSortButton,
+            sortBy === "newest" && styles.activeButton,
           ]}
         >
           <Text>Newest</Text>
@@ -112,13 +167,14 @@ const filteredRequests =
           onPress={() => setSortBy("fee")}
           style={[
             styles.sortButton,
-            sortBy === "fee" && styles.activeSortButton,
+            sortBy === "fee" && styles.activeButton,
           ]}
         >
           <Text>Fee</Text>
         </Pressable>
       </View>
 
+      {/* Filter Controls */}
       <View style={styles.filterControls}>
         {["ALL", "ANC 1", "ANC 2", "CP", "Other"].map((outlet) => (
           <Pressable
@@ -128,7 +184,7 @@ const filteredRequests =
             }
             style={[
               styles.filterButton,
-              filterOutlet === outlet && styles.activeFilterButton,
+              filterOutlet === outlet && styles.activeButton,
             ]}
           >
             <Text>{outlet}</Text>
@@ -136,29 +192,43 @@ const filteredRequests =
         ))}
       </View>
 
-
-      {Object.entries(groupedRequests).map(([hostel, hostelRequests]) => {
-        if (hostelRequests.length === 0) return null;
+      {sortedRequests.length === 0 && (
+        <Text style={styles.emptyText}>
+          No requests match your current filters.
+        </Text>
+      )}
+      {Object.entries(groupedRequests).map(([outlet, outletRequests]) => {
+        if (outletRequests.length === 0) return null;
 
         return (
-          <View key={hostel} style={styles.section}>
-            <Text style={styles.sectionTitle}>{hostel}</Text>
+          <View key={outlet} style={styles.section}>
+            <Text style={styles.sectionTitle}>{outlet}</Text>
 
-            {hostelRequests.map((item) => (
-              <RequestCard key={item.id} request={item} />
+            {outletRequests.map((item) => (
+              <RequestCard
+                key={item._id}
+                request={item}
+                onDelete={() => handleDelete(item._id)}
+                onEdit={() => handleEdit(item)}
+              />
             ))}
           </View>
-      );
-    })}
-      
-    </View>
+        );
+      })}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  centered: {
     flex: 1,
     padding: 16,
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
     fontSize: 22,
@@ -173,9 +243,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 8,
   },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 12,
+  },
   sortControls: {
-  flexDirection: "row",
-  marginBottom: 16,
+    flexDirection: "row",
+    marginBottom: 12,
   },
   sortButton: {
     paddingVertical: 8,
@@ -184,9 +261,6 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 6,
     marginRight: 8,
-  },
-  activeSortButton: {
-    backgroundColor: "#eee",
   },
   filterControls: {
     flexDirection: "row",
@@ -202,14 +276,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  activeFilterButton: {
+  activeButton: {
     backgroundColor: "#eee",
   },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 12,
-  },
+emptyText: {
+  textAlign: "center",
+  marginTop: 20,
+  color: "#666",
+},
 });

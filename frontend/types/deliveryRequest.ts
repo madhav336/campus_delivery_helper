@@ -1,9 +1,7 @@
-export type Outlet = "ANC 1" | "ANC 2" | "CP" | "Other";
-
 export interface DeliveryRequest {
-  id: string;
-  item: string;
-  outlet: Outlet;
+  _id: string;
+  itemDescription: string;
+  outlet: string;
   hostel: string;
   fee: number;
   createdAt: string;
