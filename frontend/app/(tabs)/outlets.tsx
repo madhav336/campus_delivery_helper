@@ -7,6 +7,10 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { useEffect, useState } from "react";
 import {
@@ -86,6 +90,11 @@ export default function OutletsScreen() {
   }
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1 }}
+          >
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>
         {editingId ? "Edit Outlet" : "Create Outlet"}
@@ -138,6 +147,8 @@ export default function OutletsScreen() {
         </View>
       ))}
     </ScrollView>
+    </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
   );
 }
 

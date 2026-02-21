@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, Platform, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -37,6 +37,11 @@ export default function EditScreen() {
   };
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
+                style={{ flex: 1 }}
+              >
     <View style={styles.container}>
       <Text style={styles.title}>Edit Request</Text>
 
@@ -86,6 +91,8 @@ export default function EditScreen() {
         <Text>Update</Text>
       </Pressable>
     </View>
+    </KeyboardAvoidingView>
+            </TouchableWithoutFeedback>
   );
 }
 

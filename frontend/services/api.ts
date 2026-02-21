@@ -1,6 +1,6 @@
 import { DeliveryRequest } from "@/types/deliveryRequest";
 
-const BASE_URL = "http://192.168.137.1:5000/api";
+const BASE_URL = "http://172.20.10.2:5000/api";
 
 /* ================= REQUESTS ================= */
 
