@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
+import { View, Text, StyleSheet, TextInput, Pressable, TouchableWithoutFeedback, KeyboardAvoidingView, Platform, Keyboard } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useState } from "react";
 import { useRouter } from "expo-router";
@@ -49,6 +49,11 @@ export default function CreateScreen() {
   };
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+  <KeyboardAvoidingView
+    behavior={Platform.OS === "ios" ? "padding" : undefined}
+    style={{ flex: 1 }}
+  >
     <View style={styles.container}>
       <Text style={styles.title}>Create Request</Text>
 
@@ -106,6 +111,8 @@ export default function CreateScreen() {
         <Text>Create</Text>
       </Pressable>
     </View>
+    </KeyboardAvoidingView>
+</TouchableWithoutFeedback>
   );
 }
 

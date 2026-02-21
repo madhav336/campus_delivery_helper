@@ -7,6 +7,10 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from "react-native";
 import { useEffect, useState } from "react";
 import {
@@ -85,6 +89,11 @@ export default function UsersScreen() {
   }
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>
         {editingId ? "Edit User" : "Create User"}
@@ -158,6 +167,8 @@ export default function UsersScreen() {
         </View>
       ))}
     </ScrollView>
+    </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 
