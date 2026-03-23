@@ -19,22 +19,26 @@ const deliveryRequestSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED'],
-        default: 'OPEN'
+        enum: ['PENDING_CONFIRMATION', 'OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+        default: 'PENDING_CONFIRMATION'
     },
     acceptedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null
-    }
+    },
+    requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
 }, { timestamps: true });
 
 
-// ✅ FIXED VERSION (no next issues)
 deliveryRequestSchema.pre('save', function () {
 
-    // OPEN → acceptedBy must be null
-    if (this.status === 'OPEN') {
+    // OPEN or PENDING_CONFIRMATION → acceptedBy must be null
+    if (this.status === 'OPEN' || this.status === 'PENDING_CONFIRMATION') {
         this.acceptedBy = null;
     }
 

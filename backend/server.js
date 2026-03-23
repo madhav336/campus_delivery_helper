@@ -19,11 +19,13 @@ app.use(express.json());
 const requestRoutes = require('./routes/requestRoutes');
 const userRoutes = require('./routes/userRoutes');
 const outletRoutes = require('./routes/outletRoutes');
+const availabilityRoutes = require('./routes/availabilityRoutes');
 
 // ===== Route Registrations =====
 app.use('/api/requests', requestRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/outlets', outletRoutes);
+app.use('/api/availability', availabilityRoutes);
 
 // ===== Health Check =====
 app.get('/health', (req, res) => {

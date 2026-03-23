@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['REQUESTER', 'DELIVERER'],
+    enum: ['REQUESTER', 'DELIVERER', 'OUTLET_OWNER'],
     required: true
   },
   hostel: {

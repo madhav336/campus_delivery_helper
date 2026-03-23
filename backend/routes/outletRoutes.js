@@ -52,5 +52,17 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.delete('/cleanup/all', async (req, res) => {
+  try {
+    const result = await Outlet.deleteMany({});
+    res.json({
+      message: "All outlets deleted",
+      deleted: result.deletedCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
 
