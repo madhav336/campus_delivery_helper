@@ -87,50 +87,69 @@ export default function OutletsScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      
+      {/* HEADER */}
       <Text style={styles.title}>
         {editingId ? "Edit Outlet" : "Create Outlet"}
       </Text>
 
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Outlet Name"
-        style={styles.input}
-      />
+      {/* FORM CARD */}
+      <View style={styles.card}>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="Outlet Name"
+          style={styles.input}
+        />
 
-      <TextInput
-        value={locationDescription}
-        onChangeText={setLocationDescription}
-        placeholder="Location Description"
-        style={styles.input}
-      />
+        <TextInput
+          value={locationDescription}
+          onChangeText={setLocationDescription}
+          placeholder="Location Description"
+          style={styles.input}
+        />
 
-      <Pressable
-        onPress={handleSubmit}
-        disabled={!isValid}
-        style={[styles.button, !isValid && styles.disabledButton]}
-      >
-        <Text>{editingId ? "Update" : "Create"}</Text>
-      </Pressable>
+        <Pressable
+          onPress={handleSubmit}
+          disabled={!isValid}
+          style={({ pressed }) => [
+            styles.button,
+            !isValid && styles.disabledButton,
+            { transform: [{ scale: pressed ? 0.96 : 1 }] },
+          ]}
+        >
+          <Text style={styles.buttonText}>
+            {editingId ? "Update Outlet" : "Create Outlet"}
+          </Text>
+        </Pressable>
+      </View>
 
+      {/* LIST */}
       {outlets.map((o) => (
         <View key={o._id} style={styles.card}>
           <Text style={styles.name}>{o.name}</Text>
+
           <Text style={styles.meta}>
-            Location: {o.locationDescription}
+            📍 {o.locationDescription}
           </Text>
 
           <View style={styles.actionRow}>
             <Pressable
               onPress={() => handleEdit(o)}
-              style={styles.editButton}
+              style={({ pressed }) => [
+                styles.editButton,
+                { transform: [{ scale: pressed ? 0.95 : 1 }] },
+              ]}
             >
               <Text style={styles.editText}>Edit</Text>
             </Pressable>
 
             <Pressable
               onPress={() => confirmDelete(o._id)}
-              style={styles.deleteButton}
+              style={({ pressed }) => [
+                styles.deleteButton,
+                { transform: [{ scale: pressed ? 0.95 : 1 }] },
+              ]}
             >
               <Text style={styles.deleteText}>Delete</Text>
             </Pressable>
@@ -142,62 +161,99 @@ export default function OutletsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingBottom: 40 },
+  container: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 22, fontWeight: "600", marginBottom: 16 },
 
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 10,
+  title: {
+    fontSize: 26,
+    fontWeight: "800",
     marginBottom: 12,
-    borderRadius: 6,
   },
 
-  button: {
-    backgroundColor: "#eee",
-    padding: 12,
-    alignItems: "center",
-    borderRadius: 6,
-    marginBottom: 16,
-  },
-
-  disabledButton: { opacity: 0.5 },
-
+  /* 🔥 PREMIUM CARD */
   card: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 14,
-    marginBottom: 14,
-    borderRadius: 10,
+    borderColor: "#000",
+    padding: 16,
+    marginBottom: 16,
+    borderRadius: 18,
     backgroundColor: "#fff",
   },
 
-  name: { fontSize: 16, fontWeight: "600" },
-  meta: { fontSize: 13, color: "#555", marginTop: 4 },
+  /* 🔥 INPUT */
+  input: {
+    borderWidth: 1,
+    borderColor: "#000",
+    padding: 14,
+    marginBottom: 12,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+  },
 
-  actionRow: { flexDirection: "row", marginTop: 10 },
+  /* 🔥 BUTTON */
+  button: {
+    backgroundColor: "#6366f1",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
+  },
+
+  disabledButton: {
+    opacity: 0.4,
+  },
+
+  name: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+
+  meta: {
+    fontSize: 13,
+    color: "#555",
+    marginTop: 4,
+  },
+
+  actionRow: {
+    flexDirection: "row",
+    marginTop: 12,
+  },
 
   editButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: "#e5f0ff",
-    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: "#e0ecff",
+    borderRadius: 10,
     marginRight: 8,
   },
 
-  editText: { color: "#0066cc", fontWeight: "600" },
-
-  deleteButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: "#ffe5e5",
-    borderRadius: 6,
+  editText: {
+    color: "#2563eb",
+    fontWeight: "600",
   },
 
-  deleteText: { color: "red", fontWeight: "600" },
+  deleteButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: "#fee2e2",
+    borderRadius: 10,
+  },
+
+  deleteText: {
+    color: "#dc2626",
+    fontWeight: "600",
+  },
 });

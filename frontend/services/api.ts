@@ -1,6 +1,6 @@
 import { DeliveryRequest } from "@/types/deliveryRequest";
 
-const BASE_URL = "http://192.168.137.1:5000/api";
+const BASE_URL = "http://172.20.10.7:5000/api";
 
 /* ================= REQUESTS ================= */
 
@@ -21,6 +21,8 @@ export async function createRequest(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+
+  
 
   if (!response.ok) throw new Error("Failed to create request");
 }
@@ -49,6 +51,16 @@ export async function deleteRequest(id: string): Promise<void> {
   });
 
   if (!response.ok) throw new Error("Failed to delete request");
+}
+
+export async function acceptRequest(id: string) {
+  const res = await fetch(`${BASE_URL}/requests/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "ACCEPTED" }),
+  });
+
+  if (!res.ok) throw new Error("Failed to accept request");
 }
 
 /* ================= USERS ================= */
