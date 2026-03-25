@@ -46,7 +46,7 @@ export default function UsersScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
         
         <View style={styles.container}>
           {/* HEADER */}
@@ -55,24 +55,26 @@ export default function UsersScreen() {
           </Text>
 
           {/* THEME SWITCH */}
-          <View style={styles.themeRow}>
-            {["light", "dark", "anime"].map((t) => (
-              <Pressable
-                key={t}
-                onPress={() => setTheme(t as any)}
-                style={[
-                  styles.themeBtn,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
-                <Text style={{ color: theme.text, fontWeight: "600" }}>
-                  {t}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={{ flexDirection: "row", marginBottom: 10 }}>
+  {["default", "dark", "foodie", "kopi"].map((t) => (
+    <Pressable
+      key={t}
+      onPress={() => setTheme(t)}
+      style={{
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: theme.border,
+        marginRight: 8,
+        backgroundColor: theme.card,
+      }}
+    >
+      <Text style={{ color: theme.text, fontWeight: "600" }}>
+        {t}
+      </Text>
+    </Pressable>
+  ))}
           </View>
 
           {/* FORM */}
@@ -187,10 +189,10 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
+  fontSize: 24,
+  fontWeight: "700",
+  marginBottom: 12,
+},
 
   themeRow: {
     flexDirection: "row",
@@ -244,5 +246,18 @@ const styles = StyleSheet.create({
   deleteText: {
     color: "#dc2626",
     fontWeight: "700",
+  },
+
+  GradientButton: {
+  padding: 14,
+  borderRadius: 12,
+  alignItems: "center",
+
+  backgroundColor: "#6366f1",
+
+  shadowColor: "#6366f1",
+  shadowOpacity: 0.4,
+  shadowRadius: 10,
+  elevation: 5,
   },
 });

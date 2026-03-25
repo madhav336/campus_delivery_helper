@@ -1,20 +1,20 @@
 import { createContext, useContext, useState } from "react";
 import { themes } from "@/theme/colors";
 
-type ThemeType = "light" | "dark" | "anime";
+type ThemeType = "default" | "dark" | "foodie" | "kopi";
 
 const ThemeContext = createContext<any>(null);
 
 export const ThemeProvider = ({ children }: any) => {
-  const [themeName, setThemeName] = useState<ThemeType>("light");
+  const [themeName, setThemeName] = useState<ThemeType>("default");
 
-  const theme = themes[themeName]; // ✅ dynamic theme
+  const theme = themes[themeName]; // ✅ now always valid
 
   return (
     <ThemeContext.Provider
       value={{
         theme,
-        setTheme: setThemeName, // 👈 IMPORTANT (string setter)
+        setTheme: setThemeName,
       }}
     >
       {children}

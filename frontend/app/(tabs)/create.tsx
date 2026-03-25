@@ -12,9 +12,12 @@ import {
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { createRequest } from "@/services/api";
+import { useTheme } from "@/context/ThemeContext";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CreateScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
 
   const [item, setItem] = useState("");
   const [outlet, setOutlet] = useState("");
@@ -22,137 +25,154 @@ export default function CreateScreen() {
   const [hostel, setHostel] = useState("");
   const [fee, setFee] = useState("");
 
-  const itemError = item.trim() === "";
-  const outletError =
-    outlet === "" || (outlet === "Other" && customOutlet.trim() === "");
-  const hostelError = hostel.trim() === "";
-  const feeError = Number(fee) <= 0;
-
   const isValid =
-    !itemError && !outletError && !hostelError && !feeError;
+    item && hostel && (outlet !== "Other" || customOutlet) && Number(fee) > 0;
 
   const handleSubmit = async () => {
     if (!isValid) return;
 
-    const finalOutlet =
-      outlet === "Other" ? customOutlet : outlet;
+    await createRequest({
+      itemDescription: item,
+      outlet: outlet === "Other" ? customOutlet : outlet,
+      hostel,
+      fee: Number(fee),
+    });
 
-    try {
-      await createRequest({
-        itemDescription: item,
-        outlet: finalOutlet,
-        hostel,
-        fee: Number(fee),
-      });
-
-      setItem("");
-      setOutlet("");
-      setCustomOutlet("");
-      setHostel("");
-      setFee("");
-
-      // ✅ Safe navigation inside tabs
-      router.replace("/(tabs)");
-    } catch (err) {
-      console.error("Create failed", err);
-    }
+    router.replace("/(tabs)");
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.container}>
-          <Text style={styles.title}>Create Request</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.container}>
+            
+            {/* ✅ TITLE FIXED */}
+            <Text style={[styles.title, { color: theme.text }]}>
+              Create Request
+            </Text>
 
-          <View style={styles.card}>
-            {/* ITEM */}
-            <TextInput
-              placeholder="Item"
-              value={item}
-              onChangeText={setItem}
-              style={styles.input}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            {itemError && <Text style={styles.errorText}>Item required</Text>}
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              {/* ITEM */}
+              <TextInput
+                placeholder="Item"
+                placeholderTextColor={theme.subtext}
+                value={item}
+                onChangeText={setItem}
+                style={[
+                  styles.input,
+                  {
+                    color: theme.text,
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                  },
+                ]}
+              />
 
-            {/* HOSTEL */}
-            <TextInput
-              placeholder="Hostel"
-              value={hostel}
-              onChangeText={setHostel}
-              style={styles.input}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            {hostelError && <Text style={styles.errorText}>Hostel required</Text>}
+              {/* HOSTEL */}
+              <TextInput
+                placeholder="Hostel"
+                placeholderTextColor={theme.subtext}
+                value={hostel}
+                onChangeText={setHostel}
+                style={[
+                  styles.input,
+                  {
+                    color: theme.text,
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                  },
+                ]}
+              />
 
-            {/* OUTLET SELECTOR */}
-            <View style={styles.outletRow}>
-              {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
-                <Pressable
-                  key={o}
-                  onPress={() => setOutlet(o)}
-                  style={[
-                    styles.outletButton,
-                    outlet === o && styles.activeOutlet,
-                  ]}
-                >
-                  <Text
+              {/* OUTLET */}
+              <View style={styles.row}>
+                {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
+                  <Pressable
+                    key={o}
+                    onPress={() => setOutlet(o)}
                     style={[
-                      styles.outletText,
-                      outlet === o && styles.activeOutletText,
+                      styles.chip,
+                      {
+                        backgroundColor:
+                          outlet === o ? theme.primary : theme.card,
+                        borderColor: theme.border,
+                      },
                     ]}
                   >
-                    {o}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+                    <Text
+                      style={{
+                        color: outlet === o ? "#fff" : theme.text,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {o}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
 
-            {/* CUSTOM OUTLET */}
-            {outlet === "Other" && (
+              {/* CUSTOM */}
+              {outlet === "Other" && (
+                <TextInput
+                  placeholder="Enter outlet name"
+                  placeholderTextColor={theme.subtext}
+                  value={customOutlet}
+                  onChangeText={setCustomOutlet}
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.background,
+                    },
+                  ]}
+                />
+              )}
+
+              {/* FEE */}
               <TextInput
-                placeholder="Enter outlet name"
-                value={customOutlet}
-                onChangeText={setCustomOutlet}
-                style={styles.input}
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
+                placeholder="Fee"
+                placeholderTextColor={theme.subtext}
+                value={fee}
+                onChangeText={setFee}
+                keyboardType="numeric"
+                style={[
+                  styles.input,
+                  {
+                    color: theme.text,
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                  },
+                ]}
               />
-            )}
 
-            {/* FEE */}
-            <TextInput
-              placeholder="Fee"
-              value={fee}
-              onChangeText={setFee}
-              keyboardType="numeric"
-              style={styles.input}
-              returnKeyType="done"
-              onSubmitEditing={Keyboard.dismiss}
-            />
-            {feeError && (
-              <Text style={styles.errorText}>
-                Fee must be greater than 0
-              </Text>
-            )}
-
-            {/* BUTTON */}
-            <Pressable
-              onPress={handleSubmit}
-              disabled={!isValid}
-              style={[styles.button, !isValid && styles.disabledButton]}
-            >
-              <Text style={styles.buttonText}>Create</Text>
-            </Pressable>
+              {/* BUTTON */}
+              <Pressable
+                onPress={handleSubmit}
+                style={[
+                  styles.button,
+                  { backgroundColor: theme.primary },
+                ]}
+              >
+                <Text style={styles.buttonText}>Create</Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -160,65 +180,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: "#f9fafb",
   },
 
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "700",
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
   card: {
     borderWidth: 1,
-    borderColor: "#000",
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
-    backgroundColor: "#fff",
   },
 
   input: {
     borderWidth: 1,
-    borderColor: "#000",
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: "#fff",
   },
 
-  outletRow: {
+  row: {
     flexDirection: "row",
     flexWrap: "wrap",
     marginBottom: 10,
   },
 
-  outletButton: {
+  chip: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#000",
     borderRadius: 10,
-    marginRight: 8,
-    marginBottom: 8,
-    backgroundColor: "#fff",
-  },
-
-  activeOutlet: {
-    backgroundColor: "#6366f1",
-    borderColor: "#6366f1",
-  },
-
-  outletText: {
-    color: "#000",
-    fontWeight: "600",
-  },
-
-  activeOutletText: {
-    color: "#fff",
+    borderWidth: 1,
+    marginRight: 6,
+    marginBottom: 6,
   },
 
   button: {
-    backgroundColor: "#000",
     padding: 14,
     borderRadius: 12,
     alignItems: "center",
@@ -228,15 +226,5 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontWeight: "700",
-  },
-
-  disabledButton: {
-    opacity: 0.4,
-  },
-
-  errorText: {
-    color: "red",
-    fontSize: 12,
-    marginBottom: 8,
   },
 });

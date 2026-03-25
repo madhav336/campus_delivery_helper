@@ -111,6 +111,12 @@ export default function RequestsScreen() {
       <View style={styles.centered}>
         <ActivityIndicator size="large" />
         <Text style={{ marginTop: 8 }}>Loading requests...</Text>
+        <Pressable
+            onPress={() => router.push("/create")}
+            style={styles.fab}
+          >
+            <Text style={styles.fabText}>＋</Text>
+          </Pressable>
       </View>
     );
   }
@@ -126,7 +132,7 @@ export default function RequestsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <SafeAreaView edges={["left", "right", "bottom"]} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           
           {/* HEADER */}
@@ -271,10 +277,10 @@ const styles = StyleSheet.create({
 
   /* 🔥 TITLE (match users) */
   title: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
+  fontSize: 24,
+  fontWeight: "700",
+  marginBottom: 12,
+},
 
   /* 🔥 INPUT (same as users) */
   searchInput: {
@@ -336,4 +342,25 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 13,
   },
+
+  fab: {
+  position: "absolute",
+  bottom: 90,
+  right: 20,
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+  backgroundColor: "#6366f1",
+
+  justifyContent: "center",
+  alignItems: "center",
+
+  elevation: 6,
+},
+
+fabText: {
+  color: "#fff",
+  fontSize: 28,
+  fontWeight: "700",
+},
 });

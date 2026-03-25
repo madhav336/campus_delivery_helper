@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { DeliveryRequest } from "@/types/deliveryRequest";
 import { acceptRequest } from "@/services/api";
+import { useTheme } from "@/context/ThemeContext";
 
 interface RequestCardProps {
   request: DeliveryRequest;
@@ -15,21 +16,26 @@ export default function RequestCard({
   onEdit,
   onRefresh,
 }: RequestCardProps) {
+  const { theme } = useTheme();
 
-  const getColor = (outlet: string) => {
-    if (outlet === "ANC 1") return "#f97316";
-    if (outlet === "CP") return "#22c55e";
-    if (outlet === "ANC 2") return "#3b82f6";
-    return "#a855f7";
+  const getColor = (outlet: string) =>
+    theme.outletColors?.[outlet] || theme.primary;
+
+  const accent = getColor(request.outlet);
+
+  // 🔥 GET INITIALS (clean replacement for icon)
+  const getInitials = (text: string) => {
+    const words = text.split(" ");
+    if (words.length === 1) return words[0][0];
+    return words[0][0] + words[1][0];
   };
 
   const handleAccept = async () => {
     try {
       await acceptRequest(request._id);
-      alert("Accepted successfully ✅");
       onRefresh && onRefresh();
-    } catch (err) {
-      alert("Failed to accept request");
+    } catch {
+      alert("Failed ❌");
     }
   };
 
@@ -37,64 +43,98 @@ export default function RequestCard({
     <View
       style={[
         styles.card,
-        { borderLeftWidth: 5, borderLeftColor: getColor(request.outlet) },
+        {
+          backgroundColor: theme.card,
+          borderColor: theme.border,
+        },
       ]}
     >
-      {/* TOP ROW */}
-      <View style={styles.topRow}>
-        <Text style={styles.item}>🍔 {request.itemDescription}</Text>
-        <Text style={styles.fee}>₹{request.fee}</Text>
-      </View>
+      {/* ACCENT STRIP */}
+      <View style={[styles.accent, { backgroundColor: accent }]} />
 
-      {/* DETAILS */}
-      <View style={styles.detailsRow}>
-        <Text style={styles.meta}>🏪 {request.outlet}</Text>
-        <Text style={styles.meta}>🏠 {request.hostel}</Text>
-      </View>
-
-      {/* ACTION ROW */}
-      <View style={styles.actionRow}>
-        <View style={styles.leftButtons}>
-          {onEdit && (
-            <Pressable
-              onPress={onEdit}
-              style={({ pressed }) => [
-                styles.editButton,
-                { opacity: pressed ? 0.7 : 1 },
+      <View style={styles.content}>
+        
+        {/* TOP */}
+        <View style={styles.topRow}>
+          
+          {/* LEFT SIDE */}
+          <View style={styles.left}>
+            
+            {/* 🔥 INITIAL CIRCLE */}
+            <View
+              style={[
+                styles.initialCircle,
+                { backgroundColor: accent + "20" },
               ]}
             >
-              <Text style={styles.editText}>✏️ Edit</Text>
-            </Pressable>
-          )}
+              <Text style={[styles.initialText, { color: accent }]}>
+                {getInitials(request.itemDescription).toUpperCase()}
+              </Text>
+            </View>
 
-          {onDelete && (
-            <Pressable
-              onPress={onDelete}
-              style={({ pressed }) => [
-                styles.deleteButton,
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={styles.deleteText}>🗑 Delete</Text>
-            </Pressable>
-          )}
+            {/* TEXT */}
+            <View>
+              <Text style={[styles.title, { color: theme.text }]}>
+                {request.itemDescription}
+              </Text>
+
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: accent + "15" },
+                ]}
+              >
+                <Text style={{ color: accent, fontSize: 12 }}>
+                  {request.outlet}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* PRICE */}
+          <Text style={[styles.price, { color: accent }]}>
+            ₹{request.fee}
+          </Text>
         </View>
 
-        {request.status === "OPEN" ? (
-          <Pressable
-            onPress={handleAccept}
-            style={({ pressed }) => [
-              styles.acceptButton,
-              { transform: [{ scale: pressed ? 0.95 : 1 }] },
-            ]}
-          >
-            <Text style={styles.acceptText}>⚡ Accept</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>✔ {request.status}</Text>
+        {/* DETAILS */}
+        <Text style={[styles.sub, { color: theme.subtext }]}>
+          Deliver to {request.hostel}
+        </Text>
+
+        {/* ACTIONS */}
+        <View style={styles.actions}>
+          
+          <View style={styles.leftActions}>
+            {onEdit && (
+              <Pressable style={styles.secondaryBtn} onPress={onEdit}>
+                <Text style={styles.secondaryText}>Edit</Text>
+              </Pressable>
+            )}
+
+            {onDelete && (
+              <Pressable style={styles.deleteBtn} onPress={onDelete}>
+                <Text style={styles.deleteText}>Delete</Text>
+              </Pressable>
+            )}
           </View>
-        )}
+
+          {request.status === "OPEN" ? (
+            <Pressable
+              style={[
+                styles.primaryBtn,
+                { backgroundColor: accent },
+              ]}
+              onPress={handleAccept}
+            >
+              <Text style={styles.primaryText}>Accept</Text>
+            </Pressable>
+          ) : (
+            <Text style={{ color: theme.subtext }}>
+              ✔ {request.status}
+            </Text>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -102,73 +142,104 @@ export default function RequestCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#ffffff",
     borderRadius: 18,
-    padding: 16,
+    borderWidth: 1,
     marginBottom: 16,
-
+    overflow: "hidden",
     elevation: 3,
+  },
+
+  accent: {
+    width: 5,
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+  },
+
+  content: {
+    padding: 16,
+    paddingLeft: 20,
   },
 
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 6,
   },
 
-  item: {
+  left: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  /* 🔥 INITIAL AVATAR */
+  initialCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+
+  initialText: {
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
+  title: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
   },
 
-  fee: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#16a34a",
-  },
-
-  detailsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  badge: {
     marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    alignSelf: "flex-start",
   },
 
-  meta: {
+  price: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  sub: {
+    marginTop: 10,
     fontSize: 13,
-    color: "#6b7280",
   },
 
-  actionRow: {
+  actions: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
     marginTop: 14,
+    alignItems: "center",
   },
 
-  leftButtons: {
+  leftActions: {
     flexDirection: "row",
   },
 
-  editButton: {
-    paddingVertical: 7,
+  secondaryBtn: {
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: "#eef2ff",
     borderRadius: 10,
+    backgroundColor: "#eef2ff",
     marginRight: 8,
   },
 
-  editText: {
+  secondaryText: {
     color: "#4f46e5",
     fontWeight: "600",
   },
 
-  deleteButton: {
-    paddingVertical: 7,
+  deleteBtn: {
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: "#fef2f2",
     borderRadius: 10,
+    backgroundColor: "#fee2e2",
   },
 
   deleteText: {
@@ -176,28 +247,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  acceptButton: {
-    backgroundColor: "#22c55e",
+  primaryBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
   },
 
-  acceptText: {
-    color: "#ffffff",
+  primaryText: {
+    color: "#fff",
     fontWeight: "700",
-  },
-
-  statusBadge: {
-    backgroundColor: "#dcfce7",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-
-  statusText: {
-    color: "#15803d",
-    fontWeight: "700",
-    fontSize: 12,
   },
 });

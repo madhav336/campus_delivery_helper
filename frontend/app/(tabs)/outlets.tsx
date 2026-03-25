@@ -15,8 +15,12 @@ import {
   updateOutlet,
   deleteOutlet,
 } from "@/services/api";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "@/context/ThemeContext";
 
 export default function OutletsScreen() {
+  const { theme } = useTheme();
+
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,85 +82,129 @@ export default function OutletsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 8 }}>Loading outlets...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ marginTop: 8, color: theme.text }}>
+          Loading outlets...
+        </Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      
-      {/* HEADER */}
-      <Text style={styles.title}>
-        {editingId ? "Edit Outlet" : "Create Outlet"}
-      </Text>
-
-      {/* FORM CARD */}
-      <View style={styles.card}>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Outlet Name"
-          style={styles.input}
-        />
-
-        <TextInput
-          value={locationDescription}
-          onChangeText={setLocationDescription}
-          placeholder="Location Description"
-          style={styles.input}
-        />
-
-        <Pressable
-          onPress={handleSubmit}
-          disabled={!isValid}
-          style={({ pressed }) => [
-            styles.button,
-            !isValid && styles.disabledButton,
-            { transform: [{ scale: pressed ? 0.96 : 1 }] },
-          ]}
-        >
-          <Text style={styles.buttonText}>
-            {editingId ? "Update Outlet" : "Create Outlet"}
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* LIST */}
-      {outlets.map((o) => (
-        <View key={o._id} style={styles.card}>
-          <Text style={styles.name}>{o.name}</Text>
-
-          <Text style={styles.meta}>
-            📍 {o.locationDescription}
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.container}>
+          
+          {/* HEADER */}
+          <Text style={[styles.title, { color: theme.text }]}>
+            {editingId ? "Edit Outlet" : "Create Outlet"}
           </Text>
 
-          <View style={styles.actionRow}>
-            <Pressable
-              onPress={() => handleEdit(o)}
-              style={({ pressed }) => [
-                styles.editButton,
-                { transform: [{ scale: pressed ? 0.95 : 1 }] },
+          {/* FORM */}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Outlet Name"
+              placeholderTextColor={theme.subtext}
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
               ]}
-            >
-              <Text style={styles.editText}>Edit</Text>
-            </Pressable>
+            />
+
+            <TextInput
+              value={locationDescription}
+              onChangeText={setLocationDescription}
+              placeholder="Location Description"
+              placeholderTextColor={theme.subtext}
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
+              ]}
+            />
 
             <Pressable
-              onPress={() => confirmDelete(o._id)}
+              onPress={handleSubmit}
+              disabled={!isValid}
               style={({ pressed }) => [
-                styles.deleteButton,
-                { transform: [{ scale: pressed ? 0.95 : 1 }] },
+                styles.button,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: !isValid ? 0.4 : 1,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                },
               ]}
             >
-              <Text style={styles.deleteText}>Delete</Text>
+              <Text style={styles.buttonText}>
+                {editingId ? "Update Outlet" : "Create Outlet"}
+              </Text>
             </Pressable>
           </View>
-        </View>
-      ))}
-    </ScrollView>
+
+          {/* LIST */}
+          {outlets.map((o) => (
+            <View
+              key={o._id}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.name, { color: theme.text }]}>
+                {o.name}
+              </Text>
+
+              <Text style={[styles.meta, { color: theme.subtext }]}>
+                📍 {o.locationDescription}
+              </Text>
+
+              <View style={styles.actionRow}>
+                <Pressable
+                  onPress={() => handleEdit(o)}
+                  style={({ pressed }) => [
+                    styles.editButton,
+                    { transform: [{ scale: pressed ? 0.95 : 1 }] },
+                  ]}
+                >
+                  <Text style={styles.editText}>Edit</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => confirmDelete(o._id)}
+                  style={({ pressed }) => [
+                    styles.deleteButton,
+                    { transform: [{ scale: pressed ? 0.95 : 1 }] },
+                  ]}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -173,57 +221,43 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 26,
-    fontWeight: "800",
-    marginBottom: 12,
-  },
+  fontSize: 24,
+  fontWeight: "700",
+  marginBottom: 12,
+},
 
-  /* 🔥 PREMIUM CARD */
   card: {
     borderWidth: 1,
-    borderColor: "#000",
+    borderRadius: 14,
     padding: 16,
     marginBottom: 16,
-    borderRadius: 18,
-    backgroundColor: "#fff",
   },
 
-  /* 🔥 INPUT */
   input: {
     borderWidth: 1,
-    borderColor: "#000",
-    padding: 14,
-    marginBottom: 12,
-    borderRadius: 14,
-    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
   },
 
-  /* 🔥 BUTTON */
   button: {
-    backgroundColor: "#6366f1",
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
   },
 
   buttonText: {
     color: "#fff",
     fontWeight: "700",
-    fontSize: 15,
-  },
-
-  disabledButton: {
-    opacity: 0.4,
   },
 
   name: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
   },
 
   meta: {
     fontSize: 13,
-    color: "#555",
     marginTop: 4,
   },
 

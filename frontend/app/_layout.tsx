@@ -4,10 +4,10 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
         <Stack screenOptions={{ headerShown: false }} />
-      </ThemeProvider>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
