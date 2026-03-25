@@ -19,8 +19,13 @@ import {
   updateOutlet,
   deleteOutlet,
 } from "@/services/api";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "@/context/ThemeContext";
+import ModeSwitcher from "@/components/ui/ModeSwitcher";
 
 export default function OutletsScreen() {
+  const { theme } = useTheme();
+
   const [outlets, setOutlets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -82,133 +87,213 @@ export default function OutletsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 8 }}>Loading outlets...</Text>
+      <View style={[styles.centered, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+        <Text style={{ marginTop: 8, color: theme.text }}>
+          Loading outlets...
+        </Text>
+        <ModeSwitcher />
       </View>
     );
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={{ flex: 1 }}
-          >
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>
-        {editingId ? "Edit Outlet" : "Create Outlet"}
-      </Text>
-
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Outlet Name"
-        style={styles.input}
-      />
-
-      <TextInput
-        value={locationDescription}
-        onChangeText={setLocationDescription}
-        placeholder="Location Description"
-        style={styles.input}
-      />
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={!isValid}
-        style={[styles.button, !isValid && styles.disabledButton]}
-      >
-        <Text>{editingId ? "Update" : "Create"}</Text>
-      </Pressable>
-
-      {outlets.map((o) => (
-        <View key={o._id} style={styles.card}>
-          <Text style={styles.name}>{o.name}</Text>
-          <Text style={styles.meta}>
-            Location: {o.locationDescription}
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.container}>
+          
+          {/* HEADER */}
+          <Text style={[styles.title, { color: theme.text }]}>
+            {editingId ? "Edit Outlet" : "Create Outlet"}
           </Text>
 
-          <View style={styles.actionRow}>
-            <Pressable
-              onPress={() => handleEdit(o)}
-              style={styles.editButton}
-            >
-              <Text style={styles.editText}>Edit</Text>
-            </Pressable>
+          {/* FORM */}
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.card,
+                borderColor: theme.border,
+              },
+            ]}
+          >
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Outlet Name"
+              placeholderTextColor={theme.subtext}
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
+              ]}
+            />
+
+            <TextInput
+              value={locationDescription}
+              onChangeText={setLocationDescription}
+              placeholder="Location Description"
+              placeholderTextColor={theme.subtext}
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.background,
+                },
+              ]}
+            />
 
             <Pressable
-              onPress={() => confirmDelete(o._id)}
-              style={styles.deleteButton}
+              onPress={handleSubmit}
+              disabled={!isValid}
+              style={({ pressed }) => [
+                styles.button,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: !isValid ? 0.4 : 1,
+                  transform: [{ scale: pressed ? 0.96 : 1 }],
+                },
+              ]}
             >
-              <Text style={styles.deleteText}>Delete</Text>
+              <Text style={styles.buttonText}>
+                {editingId ? "Update Outlet" : "Create Outlet"}
+              </Text>
             </Pressable>
           </View>
-        </View>
-      ))}
-    </ScrollView>
-    </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
+
+          {/* LIST */}
+          {outlets.map((o) => (
+            <View
+              key={o._id}
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.card,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Text style={[styles.name, { color: theme.text }]}>
+                {o.name}
+              </Text>
+
+              <Text style={[styles.meta, { color: theme.subtext }]}>
+                📍 {o.locationDescription}
+              </Text>
+
+              <View style={styles.actionRow}>
+                <Pressable
+                  onPress={() => handleEdit(o)}
+                  style={({ pressed }) => [
+                    styles.editButton,
+                    { transform: [{ scale: pressed ? 0.95 : 1 }] },
+                  ]}
+                >
+                  <Text style={styles.editText}>Edit</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => confirmDelete(o._id)}
+                  style={({ pressed }) => [
+                    styles.deleteButton,
+                    { transform: [{ scale: pressed ? 0.95 : 1 }] },
+                  ]}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingBottom: 40 },
+  container: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  title: { fontSize: 22, fontWeight: "600", marginBottom: 16 },
 
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 10,
-    marginBottom: 12,
-    borderRadius: 6,
-  },
-
-  button: {
-    backgroundColor: "#eee",
-    padding: 12,
-    alignItems: "center",
-    borderRadius: 6,
-    marginBottom: 16,
-  },
-
-  disabledButton: { opacity: 0.5 },
+  title: {
+  fontSize: 24,
+  fontWeight: "700",
+  marginBottom: 12,
+},
 
   card: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    padding: 14,
-    marginBottom: 14,
-    borderRadius: 10,
-    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
   },
 
-  name: { fontSize: 16, fontWeight: "600" },
-  meta: { fontSize: 13, color: "#555", marginTop: 4 },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
 
-  actionRow: { flexDirection: "row", marginTop: 10 },
+  button: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+
+  name: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  meta: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  actionRow: {
+    flexDirection: "row",
+    marginTop: 12,
+  },
 
   editButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: "#e5f0ff",
-    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: "#e0ecff",
+    borderRadius: 10,
     marginRight: 8,
   },
 
-  editText: { color: "#0066cc", fontWeight: "600" },
-
-  deleteButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: "#ffe5e5",
-    borderRadius: 6,
+  editText: {
+    color: "#2563eb",
+    fontWeight: "600",
   },
 
-  deleteText: { color: "red", fontWeight: "600" },
+  deleteButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: "#fee2e2",
+    borderRadius: 10,
+  },
+
+  deleteText: {
+    color: "#dc2626",
+    fontWeight: "600",
+  },
 });

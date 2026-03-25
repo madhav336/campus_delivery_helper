@@ -1,42 +1,46 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import "react-native-reanimated";
+import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { View, StatusBar } from "react-native";
+import ThemeSwitcherFab from "@/components/ui/ThemeSwitcherFab";
+import RoleSwitcherFab from "@/components/ui/RoleSwitcherFab";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
+function AppLayout() {
+  const { theme } = useTheme();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  if (!theme) return null;
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShown: false,
-            title: "Home",
-          }}
-        />
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      {/* 🔥 STATUS BAR (important for dark theme look) */}
+      <StatusBar
+        barStyle={theme.bg === "#0f172a" ? "light-content" : "dark-content"}
+        backgroundColor={theme.bg}
+      />
 
-        <Stack.Screen
-          name="edit/[id]"
-          options={{
-            title: "Edit Request",
-            headerBackTitle: "", // ✅ removes "(tabs)" text on iOS
-          }}
-        />
+      {/* 🔥 STACK */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: theme.bg, // ✅ KEY FIX
+          },
+        }}
+      />
 
-        <Stack.Screen
-          name="modal"
-          options={{
-            presentation: "modal",
-            title: "Modal",
-          }}
-        />
-      </Stack>
+      {/* FLOATING BUTTONS */}
+      <RoleSwitcherFab />
+      <ThemeSwitcherFab />
+    </View>
+  );
+}
 
-      <StatusBar style="auto" />
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <AppLayout />
+      </SafeAreaProvider>
     </ThemeProvider>
   );
 }

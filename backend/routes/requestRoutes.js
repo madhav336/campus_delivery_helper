@@ -12,25 +12,9 @@ router.post('/', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
-
-
-// GET with filters
-router.get('/', async (req, res) => {
-    try {
-        const { status, acceptedBy } = req.query;
-
-        let filter = {};
-
-        if (status) {
-            filter.status = status;
-        }
-
-        if (acceptedBy) {
-            filter.acceptedBy = acceptedBy;
-        }
-
-        const requests = await DeliveryRequest.find(filter);
-
+router.get('/',async(req,res)=>{
+    try{
+        const requests=await DeliveryRequest.find({});
         res.json(requests);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -80,7 +64,6 @@ router.delete('/:id', async (req, res) => {
 });
 
 
-
 // ✅ ACCEPT REQUEST
 router.put('/:id/accept', async (req, res) => {
     try {
@@ -121,21 +104,28 @@ router.put('/:id/accept', async (req, res) => {
 // ✅ COMPLETE REQUEST
 router.put('/:id/complete', async (req, res) => {
     try {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: "userId is required to complete request" });
+        }
+
         const request = await DeliveryRequest.findById(req.params.id);
 
         if (!request) {
             return res.status(404).json({ message: "Request not found" });
         }
 
-        // 🔒 ONLY IN_PROGRESS CAN BE COMPLETED
         if (request.status !== 'IN_PROGRESS') {
-            return res.status(400).json({
-                message: "Request must be in progress to complete"
-            });
+            return res.status(400).json({ message: "Request must be in progress to complete" });
+        }
+
+        // 🔒 ONLY ASSIGNED USER CAN COMPLETE
+        if (request.acceptedBy.toString() !== userId) {
+            return res.status(403).json({ message: "Only the user who accepted this request can complete it" });
         }
 
         request.status = 'COMPLETED';
-
         await request.save();
 
         res.json(request);
@@ -143,5 +133,6 @@ router.put('/:id/complete', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 module.exports = router;
