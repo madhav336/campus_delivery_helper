@@ -7,14 +7,16 @@ interface RequestCardProps {
   request: DeliveryRequest;
   onDelete?: () => void;
   onEdit?: () => void;
-  onRefresh?: () => void;
+  onAccept?: () => void;
+  onComplete?: () => void;
 }
 
 export default function RequestCard({
   request,
   onDelete,
   onEdit,
-  onRefresh,
+  onAccept,
+  onComplete,
 }: RequestCardProps) {
   const { theme } = useTheme();
 
@@ -30,14 +32,6 @@ export default function RequestCard({
     return words[0][0] + words[1][0];
   };
 
-  const handleAccept = async () => {
-    try {
-      await acceptRequest(request._id);
-      onRefresh && onRefresh();
-    } catch {
-      alert("Failed ❌");
-    }
-  };
 
   return (
     <View
@@ -102,7 +96,6 @@ export default function RequestCard({
           Deliver to {request.hostel}
         </Text>
 
-        {/* ACTIONS */}
         <View style={styles.actions}>
           
           <View style={styles.leftActions}>
@@ -119,21 +112,31 @@ export default function RequestCard({
             )}
           </View>
 
-          {request.status === "OPEN" ? (
-            <Pressable
-              style={[
-                styles.primaryBtn,
-                { backgroundColor: accent },
-              ]}
-              onPress={handleAccept}
-            >
-              <Text style={styles.primaryText}>Accept</Text>
-            </Pressable>
-          ) : (
-            <Text style={{ color: theme.subtext }}>
-              ✔ {request.status}
-            </Text>
-          )}
+          <View style={{ flexDirection: 'row' }}>
+            {onAccept && request.status === "OPEN" && (
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: accent, marginRight: 8 }]}
+                onPress={onAccept}
+              >
+                <Text style={styles.primaryText}>Accept</Text>
+              </Pressable>
+            )}
+
+            {onComplete && request.status === "IN_PROGRESS" && (
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: "#6366f1" }]}
+                onPress={onComplete}
+              >
+                <Text style={styles.primaryText}>Complete</Text>
+              </Pressable>
+            )}
+
+            {request.status === "COMPLETED" && (
+              <Text style={{ color: theme.subtext }}>
+                ✔ Completed
+              </Text>
+            )}
+          </View>
         </View>
       </View>
     </View>
@@ -246,7 +249,6 @@ const styles = StyleSheet.create({
     color: "#dc2626",
     fontWeight: "600",
   },
-
   primaryBtn: {
     paddingVertical: 8,
     paddingHorizontal: 18,

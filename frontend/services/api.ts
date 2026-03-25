@@ -1,6 +1,6 @@
 import { DeliveryRequest } from "@/types/deliveryRequest";
 
-const BASE_URL = "http://localhost:5000/api";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.13.121.251:5000/api";
 
 /* ================= REQUESTS ================= */
 
@@ -52,16 +52,27 @@ export async function deleteRequest(id: string): Promise<void> {
 
   if (!response.ok) throw new Error("Failed to delete request");
 }
-
-export async function acceptRequest(id: string) {
-  const res = await fetch(`${BASE_URL}/requests/${id}`, {
+export async function acceptRequest(id: string, userId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/requests/${id}/accept`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "ACCEPTED" }),
+    body: JSON.stringify({ userId }),
   });
-
-  if (!res.ok) throw new Error("Failed to accept request");
+  if (!response.ok) throw new Error("Failed to accept");
 }
+
+export async function completeRequest(id: string, userId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/requests/${id}/complete`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok) throw new Error("Failed to complete");
+}
+
+
+
+
 
 /* ================= USERS ================= */
 
@@ -147,4 +158,29 @@ export async function deleteOutlet(id: string) {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete outlet");
+}
+/* ================= AVAILABILITY ================= */
+
+export async function getAvailability() {
+  const res = await fetch(`${BASE_URL}/availability`);
+  if (!res.ok) throw new Error("Failed to fetch availability");
+  return res.json();
+}
+
+export async function createAvailability(data: { studentId: string; outlet: string; item: string }) {
+  const res = await fetch(`${BASE_URL}/availability`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create availability");
+}
+
+export async function respondAvailability(id: string, status: 'AVAILABLE' | 'NOT_AVAILABLE') {
+  const res = await fetch(`${BASE_URL}/availability/${id}/respond`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to respond to availability");
 }

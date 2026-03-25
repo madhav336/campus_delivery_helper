@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { useRouter } from "expo-router";
-import { getRequests, deleteRequest } from "@/services/api";
+import { getRequests, deleteRequest, acceptRequest, completeRequest } from "@/services/api";
 import { DeliveryRequest } from "@/types/deliveryRequest";
 import RequestCard from "@/components/RequestCard";
 import { useTheme } from "@/context/ThemeContext";
@@ -64,6 +64,24 @@ export default function RequestsScreen() {
   alert("Edit feature coming soon");
 };
 
+  const handleAccept = async (id: string) => {
+    try {
+      await acceptRequest(id, "65f1a3b8c2d3e4f5a6b7c8d9"); 
+      await loadRequests();
+    } catch {
+      Alert.alert("Error", "Could not accept request");
+    }
+  };
+
+  const handleComplete = async (id: string) => {
+    try {
+      await completeRequest(id, "65f1a3b8c2d3e4f5a6b7c8d9");
+      await loadRequests();
+    } catch {
+      Alert.alert("Error", "Could not complete request or unauthorized");
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadRequests();
@@ -72,7 +90,6 @@ export default function RequestsScreen() {
 
   /* FILTER + SEARCH */
   const processedRequests = requests
-    .filter((r) => r.status === "OPEN")
     .filter((r) => {
       const q = searchQuery.toLowerCase();
       return (
@@ -253,7 +270,8 @@ export default function RequestsScreen() {
                     request={item}
                     onDelete={() => handleDelete(item._id)}
                     onEdit={() => handleEdit(item)}
-                    onRefresh={loadRequests}
+                    onAccept={() => handleAccept(item._id)}
+                    onComplete={() => handleComplete(item._id)}
                   />
                 ))}
               </View>

@@ -10,10 +10,13 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
-import { useState } from "react";
+import { getAvailability, createAvailability, respondAvailability } from "@/services/api";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useState } from "react";
 
 type AvailabilityRequest = {
-  id: string;
+  _id: string;
+  studentId: string;
   item: string;
   outlet: string;
   status: "PENDING" | "AVAILABLE" | "NOT_AVAILABLE";
@@ -26,36 +29,51 @@ export default function AvailabilityScreen() {
   const [outlet, setOutlet] = useState("ANC 1");
   const [customOutlet, setCustomOutlet] = useState("");
   const [requests, setRequests] = useState<AvailabilityRequest[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleCreate = () => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const data = await getAvailability();
+      setRequests(data);
+    } catch {
+      console.error("Failed to load availability");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(useCallback(() => { loadData(); }, []));
+
+  const handleCreate = async () => {
     if (!item.trim()) return;
     if (outlet === "Other" && !customOutlet.trim()) return;
 
     const finalOutlet =
       outlet === "Other" ? customOutlet : outlet;
 
-    const newRequest: AvailabilityRequest = {
-      id: Date.now().toString(),
-      item,
-      outlet: finalOutlet,
-      status: "PENDING",
-    };
-
-    setRequests((prev) => [newRequest, ...prev]);
-    setItem("");
-    setCustomOutlet("");
-    setOutlet("ANC 1");
+    try {
+      // using hardcoded student ID since there is no auth context yet
+      await createAvailability({ studentId: "65f1a3b8c2d3e4f5a6b7c8d9", outlet: finalOutlet, item });
+      setItem("");
+      setCustomOutlet("");
+      setOutlet("ANC 1");
+      await loadData();
+    } catch {
+      console.error("Failed to create request");
+    }
   };
 
-  const handleRespond = (
+  const handleRespond = async (
     id: string,
     status: "AVAILABLE" | "NOT_AVAILABLE"
   ) => {
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, status } : r
-      )
-    );
+    try {
+      await respondAvailability(id, status);
+      await loadData();
+    } catch {
+      console.error("Failed to respond");
+    }
   };
 
   return (
@@ -155,7 +173,7 @@ export default function AvailabilityScreen() {
 
               <FlatList
                 data={requests}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item._id}
                 contentContainerStyle={{ paddingBottom: 100 }}
                 renderItem={({ item }) => (
                   <View
@@ -195,7 +213,7 @@ export default function AvailabilityScreen() {
               data={requests.filter(
                 (r) => r.status === "PENDING"
               )}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item._id}
               contentContainerStyle={{ paddingBottom: 100 }}
               renderItem={({ item }) => (
                 <View
@@ -219,7 +237,7 @@ export default function AvailabilityScreen() {
                   <View style={styles.actionRow}>
                     <Pressable
                       onPress={() =>
-                        handleRespond(item.id, "AVAILABLE")
+                        handleRespond(item._id, "AVAILABLE")
                       }
                       style={[
                         styles.acceptBtn,
@@ -234,7 +252,7 @@ export default function AvailabilityScreen() {
                     <Pressable
                       onPress={() =>
                         handleRespond(
-                          item.id,
+                          item._id,
                           "NOT_AVAILABLE"
                         )
                       }
