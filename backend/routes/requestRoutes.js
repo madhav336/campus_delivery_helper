@@ -13,7 +13,7 @@ router.post('/',async(req,res)=>{
 });
 router.get('/',async(req,res)=>{
     try{
-        const requests=await DeliveryRequest.find({status:'OPEN'});
+        const requests=await DeliveryRequest.find({});
         res.json(requests);
     }
     catch(error){

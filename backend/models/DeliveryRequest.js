@@ -18,8 +18,13 @@ const deliveryRequestSchema=new mongoose.Schema({
     },
     status:{
         type: String,
-        enum: ['OPEN','ACCEPTED'],
+        enum: ['OPEN','IN_PROGRESS','COMPLETED'],
         default:'OPEN'
+    },
+    acceptedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     }
 },{timestamps:true});
 module.exports=mongoose.model('DeliveryRequest',deliveryRequestSchema);
