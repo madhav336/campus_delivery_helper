@@ -20,7 +20,7 @@ import ModeSwitcher from "@/components/ui/ModeSwitcher";
 
 export default function RequestsScreen() {
   const router = useRouter();
-  const { theme } = useTheme();
+  const { theme, mode } = useTheme();
 
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,9 +97,13 @@ export default function RequestsScreen() {
         r.outlet.toLowerCase().includes(q)
       );
     })
-    .filter((r) =>
-      filterOutlet === "ALL" ? true : r.outlet === filterOutlet
-    );
+    .filter((r) => {
+      if (filterOutlet === "ALL") return true;
+      if (filterOutlet === "Other") {
+        return r.outlet !== "ANC 1" && r.outlet !== "ANC 2" && r.outlet !== "CP";
+      }
+      return r.outlet === filterOutlet;
+    });
 
   /* SORT */
   const sortedRequests = [...processedRequests].sort((a, b) => {
@@ -268,10 +272,10 @@ export default function RequestsScreen() {
                   <RequestCard
                     key={item._id}
                     request={item}
-                    onDelete={() => handleDelete(item._id)}
-                    onEdit={() => handleEdit(item)}
-                    onAccept={() => handleAccept(item._id)}
-                    onComplete={() => handleComplete(item._id)}
+                    onDelete={mode === "STUDENT" ? () => handleDelete(item._id) : undefined}
+                    onEdit={mode === "STUDENT" ? () => handleEdit(item) : undefined}
+                    onAccept={mode === "ADMIN" ? () => handleAccept(item._id) : undefined}
+                    onComplete={mode === "ADMIN" ? () => handleComplete(item._id) : undefined}
                   />
                 ))}
               </View>
