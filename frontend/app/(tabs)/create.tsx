@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { createRequest } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ModeSwitcher from "@/components/ui/ModeSwitcher";
 
 export default function CreateScreen() {
   const router = useRouter();

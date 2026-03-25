@@ -4,5 +4,9 @@ export interface DeliveryRequest {
   outlet: string;
   hostel: string;
   fee: number;
+
+  status: "OPEN" | "ACCEPTED" | "COMPLETED"; // 🔥 ADD THIS
+
   createdAt: string;
+  updatedAt?: string;
 }

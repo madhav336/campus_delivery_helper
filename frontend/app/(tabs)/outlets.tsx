@@ -17,6 +17,7 @@ import {
 } from "@/services/api";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/context/ThemeContext";
+import ModeSwitcher from "@/components/ui/ModeSwitcher";
 
 export default function OutletsScreen() {
   const { theme } = useTheme();
@@ -87,6 +88,7 @@ export default function OutletsScreen() {
         <Text style={{ marginTop: 8, color: theme.text }}>
           Loading outlets...
         </Text>
+        <ModeSwitcher />
       </View>
     );
   }

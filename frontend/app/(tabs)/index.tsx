@@ -16,6 +16,7 @@ import { getRequests, deleteRequest } from "@/services/api";
 import { DeliveryRequest } from "@/types/deliveryRequest";
 import RequestCard from "@/components/RequestCard";
 import { useTheme } from "@/context/ThemeContext";
+import ModeSwitcher from "@/components/ui/ModeSwitcher";
 
 export default function RequestsScreen() {
   const router = useRouter();
@@ -111,6 +112,7 @@ export default function RequestsScreen() {
       <View style={styles.centered}>
         <ActivityIndicator size="large" />
         <Text style={{ marginTop: 8 }}>Loading requests...</Text>
+        <ModeSwitcher />
         <Pressable
             onPress={() => router.push("/create")}
             style={styles.fab}
@@ -131,7 +133,7 @@ export default function RequestsScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           
