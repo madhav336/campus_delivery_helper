@@ -1,5 +1,14 @@
-import { View, Text, StyleSheet, TextInput, Pressable } from "react-native";
-import { Picker } from "@react-native-picker/picker";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
+} from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { createRequest } from "@/services/api";
@@ -42,81 +51,108 @@ export default function CreateScreen() {
       setHostel("");
       setFee("");
 
-      router.replace("/requests");
+      // ✅ Safe navigation inside tabs
+      router.replace("/(tabs)");
     } catch (err) {
       console.error("Create failed", err);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create Request</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.container}>
+          <Text style={styles.title}>Create Request</Text>
 
-      <View style={styles.card}>
-        <TextInput
-          placeholder="Item"
-          value={item}
-          onChangeText={setItem}
-          style={styles.input}
-        />
-        {itemError && <Text style={styles.errorText}>Item required</Text>}
+          <View style={styles.card}>
+            {/* ITEM */}
+            <TextInput
+              placeholder="Item"
+              value={item}
+              onChangeText={setItem}
+              style={styles.input}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+            {itemError && <Text style={styles.errorText}>Item required</Text>}
 
-        <TextInput
-          placeholder="Hostel"
-          value={hostel}
-          onChangeText={setHostel}
-          style={styles.input}
-        />
-        {hostelError && <Text style={styles.errorText}>Hostel required</Text>}
+            {/* HOSTEL */}
+            <TextInput
+              placeholder="Hostel"
+              value={hostel}
+              onChangeText={setHostel}
+              style={styles.input}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+            {hostelError && <Text style={styles.errorText}>Hostel required</Text>}
 
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={outlet}
-            onValueChange={(value) => setOutlet(value)}
-          >
-            <Picker.Item label="Select outlet" value="" />
-            <Picker.Item label="ANC 1" value="ANC 1" />
-            <Picker.Item label="ANC 2" value="ANC 2" />
-            <Picker.Item label="CP" value="CP" />
-            <Picker.Item label="Other" value="Other" />
-          </Picker>
+            {/* OUTLET SELECTOR */}
+            <View style={styles.outletRow}>
+              {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
+                <Pressable
+                  key={o}
+                  onPress={() => setOutlet(o)}
+                  style={[
+                    styles.outletButton,
+                    outlet === o && styles.activeOutlet,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.outletText,
+                      outlet === o && styles.activeOutletText,
+                    ]}
+                  >
+                    {o}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* CUSTOM OUTLET */}
+            {outlet === "Other" && (
+              <TextInput
+                placeholder="Enter outlet name"
+                value={customOutlet}
+                onChangeText={setCustomOutlet}
+                style={styles.input}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+            )}
+
+            {/* FEE */}
+            <TextInput
+              placeholder="Fee"
+              value={fee}
+              onChangeText={setFee}
+              keyboardType="numeric"
+              style={styles.input}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+            />
+            {feeError && (
+              <Text style={styles.errorText}>
+                Fee must be greater than 0
+              </Text>
+            )}
+
+            {/* BUTTON */}
+            <Pressable
+              onPress={handleSubmit}
+              disabled={!isValid}
+              style={[styles.button, !isValid && styles.disabledButton]}
+            >
+              <Text style={styles.buttonText}>Create</Text>
+            </Pressable>
+          </View>
         </View>
-
-        {outlet === "Other" && (
-          <TextInput
-            placeholder="Enter outlet name"
-            value={customOutlet}
-            onChangeText={setCustomOutlet}
-            style={styles.input}
-          />
-        )}
-
-        <TextInput
-          placeholder="Fee"
-          value={fee}
-          onChangeText={setFee}
-          keyboardType="numeric"
-          style={styles.input}
-        />
-        {feeError && (
-          <Text style={styles.errorText}>
-            Fee must be greater than 0
-          </Text>
-        )}
-
-        <Pressable
-          onPress={handleSubmit}
-          disabled={!isValid}
-          style={({ pressed }) => [
-            styles.button,
-            !isValid && styles.disabledButton,
-            { transform: [{ scale: pressed ? 0.96 : 1 }] },
-          ]}
-        >
-          <Text style={styles.buttonText}>Create</Text>
-        </Pressable>
-      </View>
-    </View>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -133,17 +169,14 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  /* 🔥 BOLD CARD */
   card: {
     borderWidth: 1,
     borderColor: "#000",
     borderRadius: 14,
     padding: 16,
-    marginBottom: 14,
     backgroundColor: "#fff",
   },
 
-  /* 🔥 BOLD INPUT */
   input: {
     borderWidth: 1,
     borderColor: "#000",
@@ -153,17 +186,37 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
 
-  /* 🔥 PICKER */
-  pickerWrapper: {
+  outletRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 10,
+  },
+
+  outletButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#000",
-    borderRadius: 12,
-    marginBottom: 10,
-    overflow: "hidden",
+    borderRadius: 10,
+    marginRight: 8,
+    marginBottom: 8,
     backgroundColor: "#fff",
   },
 
-  /* 🔥 BUTTON */
+  activeOutlet: {
+    backgroundColor: "#6366f1",
+    borderColor: "#6366f1",
+  },
+
+  outletText: {
+    color: "#000",
+    fontWeight: "600",
+  },
+
+  activeOutletText: {
+    color: "#fff",
+  },
+
   button: {
     backgroundColor: "#000",
     padding: 14,
