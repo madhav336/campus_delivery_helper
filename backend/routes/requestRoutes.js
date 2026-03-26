@@ -12,9 +12,21 @@ router.post('/', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
+<<<<<<< HEAD
 router.get('/',async(req,res)=>{
     try{
         const requests=await DeliveryRequest.find({});
+=======
+
+
+// GET ALL (with population)
+router.get('/', async (req, res) => {
+    try {
+        const requests = await DeliveryRequest.find({})
+            .populate('requestedBy', 'name')
+            .populate('acceptedBy', 'name');
+
+>>>>>>> feature/backend-sprint2
         res.json(requests);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -22,7 +34,7 @@ router.get('/',async(req,res)=>{
 });
 
 
-// UPDATE (no status allowed here)
+// UPDATE (no status/acceptedBy here)
 router.put('/:id', async (req, res) => {
     try {
         if (req.body.status || req.body.acceptedBy) {
@@ -64,16 +76,17 @@ router.delete('/:id', async (req, res) => {
 });
 
 
+<<<<<<< HEAD
 // ✅ ACCEPT REQUEST
+=======
+// ACCEPT REQUEST
+>>>>>>> feature/backend-sprint2
 router.put('/:id/accept', async (req, res) => {
     try {
         const { userId } = req.body;
 
-        // 🔴 REQUIRED CHECK
         if (!userId) {
-            return res.status(400).json({
-                message: "userId is required to accept request"
-            });
+            return res.status(400).json({ message: "userId is required" });
         }
 
         const request = await DeliveryRequest.findById(req.params.id);
@@ -82,7 +95,6 @@ router.put('/:id/accept', async (req, res) => {
             return res.status(404).json({ message: "Request not found" });
         }
 
-        // 🔒 ONLY OPEN CAN BE ACCEPTED
         if (request.status !== 'OPEN') {
             return res.status(400).json({
                 message: "Request already accepted or completed"
@@ -101,15 +113,18 @@ router.put('/:id/accept', async (req, res) => {
 });
 
 
-// ✅ COMPLETE REQUEST
+// COMPLETE REQUEST
 router.put('/:id/complete', async (req, res) => {
     try {
         const { userId } = req.body;
 
+<<<<<<< HEAD
         if (!userId) {
             return res.status(400).json({ message: "userId is required to complete request" });
         }
 
+=======
+>>>>>>> feature/backend-sprint2
         const request = await DeliveryRequest.findById(req.params.id);
 
         if (!request) {
@@ -125,6 +140,12 @@ router.put('/:id/complete', async (req, res) => {
             return res.status(403).json({ message: "Only the user who accepted this request can complete it" });
         }
 
+        if (request.acceptedBy.toString() !== userId) {
+            return res.status(403).json({
+                message: "Only assigned user can complete"
+            });
+        }
+
         request.status = 'COMPLETED';
         await request.save();
 
@@ -135,4 +156,21 @@ router.put('/:id/complete', async (req, res) => {
 });
 
 
+<<<<<<< HEAD
 module.exports = router;
+=======
+// CLEANUP (optional but useful)
+router.delete('/cleanup/all', async (req, res) => {
+    try {
+        const result = await DeliveryRequest.deleteMany({});
+        res.json({
+            message: "All requests deleted",
+            deleted: result.deletedCount
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+module.exports = router;
+>>>>>>> feature/backend-sprint2

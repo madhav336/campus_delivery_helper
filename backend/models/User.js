@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['REQUESTER', 'DELIVERER'],
+    enum: ['STUDENT', 'OUTLET_OWNER'],
     required: true
   },
   hostel: {
@@ -17,4 +17,3 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);
-
