@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const DeliveryRequest = require('../models/DeliveryRequest');
-const User = require('../models/User');
 
 
 // CREATE
@@ -15,22 +14,12 @@ router.post('/', async (req, res) => {
 });
 
 
-// GET with filters
+// GET ALL (with population)
 router.get('/', async (req, res) => {
     try {
-        const { status, acceptedBy } = req.query;
-
-        let filter = {};
-
-        if (status) {
-            filter.status = status;
-        }
-
-        if (acceptedBy) {
-            filter.acceptedBy = acceptedBy;
-        }
-
-        const requests = await DeliveryRequest.find(filter);
+        const requests = await DeliveryRequest.find({})
+            .populate('requestedBy', 'name')
+            .populate('acceptedBy', 'name');
 
         res.json(requests);
     } catch (error) {
@@ -39,7 +28,7 @@ router.get('/', async (req, res) => {
 });
 
 
-// UPDATE (no status or acceptedBy allowed here)
+// UPDATE (no status/acceptedBy here)
 router.put('/:id', async (req, res) => {
     try {
         if (req.body.status || req.body.acceptedBy) {
@@ -81,83 +70,13 @@ router.delete('/:id', async (req, res) => {
 });
 
 
-// CONFIRM REQUEST (Outlet owner confirms → becomes OPEN)
-router.put('/:id/confirm', async (req, res) => {
-    try {
-        const { userId } = req.body;
-
-        if (!userId) {
-            return res.status(400).json({ message: "userId is required" });
-        }
-
-        // Role check
-        const user = await User.findById(userId);
-        if (!user || user.role !== 'OUTLET_OWNER') {
-            return res.status(403).json({ message: "Only outlet owners can confirm requests" });
-        }
-
-        const request = await DeliveryRequest.findById(req.params.id);
-
-        if (!request) {
-            return res.status(404).json({ message: "Request not found" });
-        }
-
-        if (request.status !== 'PENDING_CONFIRMATION') {
-            return res.status(400).json({ message: "Request is not pending confirmation" });
-        }
-
-        request.status = 'OPEN';
-        await request.save();
-
-        res.json(request);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-// REJECT REQUEST (Outlet owner rejects → becomes CANCELLED)
-router.put('/:id/reject', async (req, res) => {
-    try {
-        const { userId } = req.body;
-
-        if (!userId) {
-            return res.status(400).json({ message: "userId is required" });
-        }
-
-        // Role check
-        const user = await User.findById(userId);
-        if (!user || user.role !== 'OUTLET_OWNER') {
-            return res.status(403).json({ message: "Only outlet owners can reject requests" });
-        }
-
-        const request = await DeliveryRequest.findById(req.params.id);
-
-        if (!request) {
-            return res.status(404).json({ message: "Request not found" });
-        }
-
-        if (request.status !== 'PENDING_CONFIRMATION') {
-            return res.status(400).json({ message: "Request is not pending confirmation" });
-        }
-
-        request.status = 'CANCELLED';
-        await request.save();
-
-        res.json(request);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-// ACCEPT REQUEST (Deliverer accepts → becomes IN_PROGRESS)
+// ACCEPT REQUEST
 router.put('/:id/accept', async (req, res) => {
     try {
         const { userId } = req.body;
 
         if (!userId) {
-            return res.status(400).json({ message: "userId is required to accept request" });
+            return res.status(400).json({ message: "userId is required" });
         }
 
         const request = await DeliveryRequest.findById(req.params.id);
@@ -166,17 +85,10 @@ router.put('/:id/accept', async (req, res) => {
             return res.status(404).json({ message: "Request not found" });
         }
 
-        // Specific message for unconfirmed requests
-        if (request.status === 'PENDING_CONFIRMATION') {
-            return res.status(400).json({ message: "Request not yet confirmed by outlet" });
-        }
-
-        if (request.status === 'CANCELLED') {
-            return res.status(400).json({ message: "Request has been cancelled" });
-        }
-
         if (request.status !== 'OPEN') {
-            return res.status(400).json({ message: "Request already accepted or completed" });
+            return res.status(400).json({
+                message: "Request already accepted or completed"
+            });
         }
 
         request.status = 'IN_PROGRESS';
@@ -191,9 +103,11 @@ router.put('/:id/accept', async (req, res) => {
 });
 
 
-// COMPLETE REQUEST (Deliverer completes → becomes COMPLETED)
+// COMPLETE REQUEST
 router.put('/:id/complete', async (req, res) => {
     try {
+        const { userId } = req.body;
+
         const request = await DeliveryRequest.findById(req.params.id);
 
         if (!request) {
@@ -201,7 +115,15 @@ router.put('/:id/complete', async (req, res) => {
         }
 
         if (request.status !== 'IN_PROGRESS') {
-            return res.status(400).json({ message: "Request must be in progress to complete" });
+            return res.status(400).json({
+                message: "Request must be in progress to complete"
+            });
+        }
+
+        if (request.acceptedBy.toString() !== userId) {
+            return res.status(403).json({
+                message: "Only assigned user can complete"
+            });
         }
 
         request.status = 'COMPLETED';
@@ -215,7 +137,7 @@ router.put('/:id/complete', async (req, res) => {
 });
 
 
-// CLEANUP
+// CLEANUP (optional but useful)
 router.delete('/cleanup/all', async (req, res) => {
     try {
         const result = await DeliveryRequest.deleteMany({});

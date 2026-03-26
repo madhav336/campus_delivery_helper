@@ -3,9 +3,7 @@ const router = express.Router();
 const AvailabilityRequest = require('../models/AvailabilityRequest');
 
 
-// ==============================
-// CREATE (Student asks availability)
-// ==============================
+// CREATE
 router.post('/', async (req, res) => {
     try {
         const request = await AvailabilityRequest.create(req.body);
@@ -16,21 +14,19 @@ router.post('/', async (req, res) => {
 });
 
 
-// ==============================
-// GET ALL (with optional filters)
-// ==============================
+// GET ALL
 router.get('/', async (req, res) => {
     try {
         const { status, outlet } = req.query;
 
         let filter = {};
-
         if (status) filter.status = status;
         if (outlet) filter.outlet = outlet;
 
         const requests = await AvailabilityRequest
             .find(filter)
-            .populate('requestedBy', 'name');
+            .populate('requestedBy', 'name')
+            .sort({ createdAt: -1 });
 
         res.json(requests);
     } catch (error) {
@@ -39,9 +35,7 @@ router.get('/', async (req, res) => {
 });
 
 
-// ==============================
-// RESPOND (Outlet owner)
-// ==============================
+// RESPOND
 router.put('/:id/respond', async (req, res) => {
     try {
         const { status } = req.body;
@@ -58,7 +52,6 @@ router.put('/:id/respond', async (req, res) => {
             return res.status(404).json({ message: "Request not found" });
         }
 
-        // Only allow response if still pending
         if (request.status !== 'PENDING') {
             return res.status(400).json({
                 message: "Request already responded to"
@@ -76,6 +69,7 @@ router.put('/:id/respond', async (req, res) => {
 });
 
 
+// CLEANUP
 router.delete('/cleanup/all', async (req, res) => {
     try {
         const result = await AvailabilityRequest.deleteMany({});
