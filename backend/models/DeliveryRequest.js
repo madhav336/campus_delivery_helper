@@ -22,18 +22,10 @@ const deliveryRequestSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-<<<<<<< HEAD
-// ENFORCE VALIDATION
-=======
->>>>>>> feature/backend-sprint2
 deliveryRequestSchema.pre('save', function () {
     if (this.status === 'OPEN') {
         this.acceptedBy = null;
     }
-<<<<<<< HEAD
-=======
-
->>>>>>> feature/backend-sprint2
     if (this.status === 'IN_PROGRESS' && !this.acceptedBy) {
         throw new Error('acceptedBy required when request is IN_PROGRESS');
     }

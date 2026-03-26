@@ -12,11 +12,6 @@ router.post('/', async (req, res) => {
         res.status(400).json({ error: error.message });
     }
 });
-<<<<<<< HEAD
-router.get('/',async(req,res)=>{
-    try{
-        const requests=await DeliveryRequest.find({});
-=======
 
 
 // GET ALL (with population)
@@ -26,7 +21,6 @@ router.get('/', async (req, res) => {
             .populate('requestedBy', 'name')
             .populate('acceptedBy', 'name');
 
->>>>>>> feature/backend-sprint2
         res.json(requests);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -76,11 +70,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 
-<<<<<<< HEAD
-// ✅ ACCEPT REQUEST
-=======
 // ACCEPT REQUEST
->>>>>>> feature/backend-sprint2
 router.put('/:id/accept', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -118,13 +108,6 @@ router.put('/:id/complete', async (req, res) => {
     try {
         const { userId } = req.body;
 
-<<<<<<< HEAD
-        if (!userId) {
-            return res.status(400).json({ message: "userId is required to complete request" });
-        }
-
-=======
->>>>>>> feature/backend-sprint2
         const request = await DeliveryRequest.findById(req.params.id);
 
         if (!request) {
@@ -135,10 +118,7 @@ router.put('/:id/complete', async (req, res) => {
             return res.status(400).json({ message: "Request must be in progress to complete" });
         }
 
-        // 🔒 ONLY ASSIGNED USER CAN COMPLETE
-        if (request.acceptedBy.toString() !== userId) {
-            return res.status(403).json({ message: "Only the user who accepted this request can complete it" });
-        }
+       
 
         if (request.acceptedBy.toString() !== userId) {
             return res.status(403).json({
@@ -156,9 +136,6 @@ router.put('/:id/complete', async (req, res) => {
 });
 
 
-<<<<<<< HEAD
-module.exports = router;
-=======
 // CLEANUP (optional but useful)
 router.delete('/cleanup/all', async (req, res) => {
     try {
@@ -173,4 +150,3 @@ router.delete('/cleanup/all', async (req, res) => {
 });
 
 module.exports = router;
->>>>>>> feature/backend-sprint2
