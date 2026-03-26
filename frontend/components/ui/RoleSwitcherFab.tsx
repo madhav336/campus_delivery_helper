@@ -52,7 +52,7 @@ export default function RoleSwitcherFab() {
           },
         ]}
       >
-        <Text style={{ color: "#fff", fontSize: 18 }}>👤</Text>
+        <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>👤</Text>
       </Pressable>
     </View>
   );
@@ -61,8 +61,8 @@ export default function RoleSwitcherFab() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 50,
-    right: 80, // 👈 LEFT OF THEME BUTTON
+    bottom: 100,
+    right: 80,
     alignItems: "flex-end",
     zIndex: 999,
   },

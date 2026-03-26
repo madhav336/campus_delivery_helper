@@ -23,10 +23,7 @@ export default function RequestCard({
     theme.outletColors?.[outlet] || theme.primary;
 
   const accent = getColor(request.outlet);
-
-  // ✅ FORCE SAFE STATUS (THIS FIXES YOUR ISSUE)
-  const status =
-    request.status === "COMPLETED" ? "COMPLETED" : "OPEN";
+  const status = request.status;
 
   const getInitials = (text: string) => {
     const words = text.split(" ");
@@ -49,17 +46,6 @@ export default function RequestCard({
       <View style={styles.content}>
         <View style={styles.topRow}>
           <View style={styles.left}>
-            <View
-              style={[
-                styles.initialCircle,
-                { backgroundColor: accent + "20" },
-              ]}
-            >
-              <Text style={[styles.initialText, { color: accent }]}>
-                {getInitials(request.itemDescription).toUpperCase()}
-              </Text>
-            </View>
-
             <View>
               <Text style={[styles.title, { color: theme.text }]}>
                 {request.itemDescription}
@@ -102,17 +88,22 @@ export default function RequestCard({
             )}
           </View>
 
-          {/* ✅ ONLY CHANGE IS HERE */}
-          <View style={{ flexDirection: "row" }}>
-            {status === "OPEN" && (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {status === "OPEN" && onAccept && (
               <Pressable
-                style={[
-                  styles.primaryBtn,
-                  { backgroundColor: accent, marginRight: 8 },
-                ]}
-                onPress={onAccept} // 👉 THIS WILL TURN INTO COMPLETED
+                style={[styles.primaryBtn, { backgroundColor: accent }]}
+                onPress={onAccept}
               >
                 <Text style={styles.primaryText}>Accept</Text>
+              </Pressable>
+            )}
+
+            {status === "IN_PROGRESS" && onComplete && (
+              <Pressable
+                style={[styles.primaryBtn, { backgroundColor: "#10b981" }]}
+                onPress={onComplete}
+              >
+                <Text style={styles.primaryText}>Complete</Text>
               </Pressable>
             )}
 

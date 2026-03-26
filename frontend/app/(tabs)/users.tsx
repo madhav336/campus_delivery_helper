@@ -5,26 +5,33 @@ import {
   TextInput,
   Pressable,
   FlatList,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
-import { getUsers, createUser, deleteUser } from "@/services/api";
+import { getUsers, createUser, deleteUser, updateUser } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import Card from "@/components/ui/Card";
 import GradientButton from "@/components/ui/GradientButton";
 import TopBar from "@/components/ui/TopBar";
 
 export default function UsersScreen() {
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
 
   const [users, setUsers] = useState<any[]>([]);
   const [name, setName] = useState("");
   const [hostel, setHostel] = useState("");
-  const [role, setRole] = useState<"REQUESTER" | "DELIVERER">("REQUESTER");
+  const [role, setRole] = useState<"STUDENT" | "OUTLET_OWNER">("STUDENT");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const fetchUsers = async () => {
-    const data = await getUsers();
-    setUsers(data);
+    try {
+      const data = await getUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error("Failed to fetch users", error);
+      Alert.alert("Error", "Failed to fetch users");
+    }
   };
 
   useEffect(() => {
@@ -32,32 +39,89 @@ export default function UsersScreen() {
   }, []);
 
   const handleCreate = async () => {
-    if (!name || !hostel) return;
-    await createUser({ name, hostel, role });
-    setName("");
-    setHostel("");
-    setRole("REQUESTER");
-    fetchUsers();
+    if (!name || !hostel) {
+      Alert.alert("Validation Error", "Please fill all fields");
+      return;
+    }
+
+    try {
+      await createUser({ name, hostel, role });
+      setName("");
+      setHostel("");
+      setRole("STUDENT");
+      Alert.alert("Success", "User created! ✅");
+      fetchUsers();
+    } catch (error) {
+      Alert.alert("Error", "Failed to create user");
+      console.error("Failed to create user", error);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!name || !hostel || !editingId) {
+      Alert.alert("Validation Error", "Please fill all fields");
+      return;
+    }
+
+    try {
+      await updateUser(editingId, { name, hostel, role });
+      setName("");
+      setHostel("");
+      setRole("STUDENT");
+      setEditingId(null);
+      Alert.alert("Success", "User updated! ✅");
+      fetchUsers();
+    } catch (error) {
+      Alert.alert("Error", "Failed to update user");
+      console.error("Failed to update user", error);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await deleteUser(id);
-    fetchUsers();
+    Alert.alert("Delete User", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteUser(id);
+            Alert.alert("Success", "User deleted! ✅");
+            fetchUsers();
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete user");
+            console.error("Failed to delete user", error);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleEditStart = (user: any) => {
+    setEditingId(user._id);
+    setName(user.name);
+    setHostel(user.hostel);
+    setRole(user.role);
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setName("");
+    setHostel("");
+    setRole("STUDENT");
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      
       <View style={styles.container}>
-        
-        {/* 🔥 TOP BAR */}
         <TopBar title="Users" />
 
-        {/* 🎨 THEME SWITCH */}
-        
-
-        {/* 🧾 FORM */}
+        {/* FORM */}
         <Card>
+          <Text style={[styles.formTitle, { color: theme.text }]}>
+            {editingId ? "Edit User" : "Create User"}
+          </Text>
+
           <TextInput
             placeholder="Name"
             placeholderTextColor={theme.subtext}
@@ -90,7 +154,7 @@ export default function UsersScreen() {
 
           {/* ROLE SELECT */}
           <View style={styles.roleRow}>
-            {["REQUESTER", "DELIVERER"].map((r) => (
+            {["STUDENT", "OUTLET_OWNER"].map((r) => (
               <Pressable
                 key={r}
                 onPress={() => setRole(r as any)}
@@ -115,10 +179,28 @@ export default function UsersScreen() {
             ))}
           </View>
 
-          <GradientButton title="Create User" onPress={handleCreate} />
+          {/* ACTION BUTTONS */}
+          <View style={styles.buttonRow}>
+            <View style={{ flex: 1 }}>
+              <GradientButton
+                title={editingId ? "Update User" : "Create User"}
+                onPress={editingId ? handleUpdate : handleCreate}
+              />
+            </View>
+            {editingId && (
+              <Pressable
+                onPress={handleEditCancel}
+                style={[styles.cancelBtn, { borderColor: theme.border }]}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </Card>
 
-        {/* 📋 LIST */}
+        {/* LIST */}
         <FlatList
           data={users}
           keyExtractor={(item) => item._id}
@@ -134,24 +216,33 @@ export default function UsersScreen() {
                 {item.name}
               </Text>
 
-              <Text style={{ color: theme.subtext }}>
+              <Text style={{ color: theme.subtext, marginBottom: 4 }}>
                 Role: {item.role}
               </Text>
-              <Text style={{ color: theme.subtext }}>
+              <Text style={{ color: theme.subtext, marginBottom: 12 }}>
                 Hostel: {item.hostel}
               </Text>
 
-              <Pressable
-                onPress={() => handleDelete(item._id)}
-                style={styles.deleteBtn}
-              >
-                <Text style={styles.deleteText}>Delete</Text>
-              </Pressable>
+              <View style={styles.cardActions}>
+                <Pressable
+                  onPress={() => handleEditStart(item)}
+                  style={[styles.editBtn, { borderColor: theme.primary }]}
+                >
+                  <Text style={{ color: theme.primary, fontWeight: "600" }}>
+                    Edit
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => handleDelete(item._id)}
+                  style={styles.deleteBtn}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </Pressable>
+              </View>
             </Card>
           )}
         />
       </View>
-
     </SafeAreaView>
   );
 }
@@ -162,17 +253,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  themeRow: {
-    flexDirection: "row",
+  formTitle: {
+    fontSize: 16,
+    fontWeight: "700",
     marginBottom: 12,
-    gap: 8,
-  },
-
-  themeBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
   },
 
   input: {
@@ -196,19 +280,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
 
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
+
+  cancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+
   name: {
     fontSize: 16,
     fontWeight: "700",
     marginBottom: 6,
   },
 
+  cardActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  editBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: "center",
+  },
+
   deleteBtn: {
-    marginTop: 12,
+    flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
     backgroundColor: "#fee2e2",
-    alignSelf: "flex-start",
+    alignItems: "center",
   },
 
   deleteText: {

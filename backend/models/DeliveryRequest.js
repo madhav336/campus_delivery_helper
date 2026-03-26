@@ -14,10 +14,14 @@ const deliveryRequestSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null
+    },
+    requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     }
 }, { timestamps: true });
 
-// ENFORCE VALIDATION
 deliveryRequestSchema.pre('save', function () {
     if (this.status === 'OPEN') {
         this.acceptedBy = null;

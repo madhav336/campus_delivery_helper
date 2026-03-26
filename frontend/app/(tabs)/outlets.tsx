@@ -4,296 +4,277 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ScrollView,
+  FlatList,
   Alert,
-  ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from "react-native";
-import { useEffect, useState } from "react";
-import {
-  getOutlets,
-  createOutlet,
-  updateOutlet,
-  deleteOutlet,
-} from "@/services/api";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useEffect, useState } from "react";
+import { getOutlets, createOutlet, deleteOutlet, updateOutlet } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
-import ModeSwitcher from "@/components/ui/ModeSwitcher";
+import Card from "@/components/ui/Card";
+import GradientButton from "@/components/ui/GradientButton";
+import TopBar from "@/components/ui/TopBar";
 
 export default function OutletsScreen() {
   const { theme } = useTheme();
 
   const [outlets, setOutlets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [name, setName] = useState("");
   const [locationDescription, setLocationDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const isValid =
-    name.trim() !== "" && locationDescription.trim() !== "";
-
-  const loadOutlets = async () => {
-    setLoading(true);
-    const data = await getOutlets();
-    setOutlets(data);
-    setLoading(false);
+  const fetchOutlets = async () => {
+    try {
+      const data = await getOutlets();
+      setOutlets(data);
+    } catch (error) {
+      console.error("Failed to fetch outlets", error);
+      Alert.alert("Error", "Failed to fetch outlets");
+    }
   };
 
   useEffect(() => {
-    loadOutlets();
+    fetchOutlets();
   }, []);
 
-  const handleSubmit = async () => {
-    if (!isValid) return;
-
-    if (editingId) {
-      await updateOutlet(editingId, {
-        name,
-        locationDescription,
-      });
-      setEditingId(null);
-    } else {
-      await createOutlet({ name, locationDescription });
+  const handleCreate = async () => {
+    if (!name || !locationDescription) {
+      Alert.alert("Validation Error", "Please fill all fields");
+      return;
     }
 
-    setName("");
-    setLocationDescription("");
-    loadOutlets();
+    try {
+      await createOutlet({ name, locationDescription });
+      setName("");
+      setLocationDescription("");
+      Alert.alert("Success", "Outlet created! ✅");
+      fetchOutlets();
+    } catch (error) {
+      Alert.alert("Error", "Failed to create outlet");
+      console.error("Failed to create outlet", error);
+    }
   };
 
-  const handleEdit = (o: any) => {
-    setEditingId(o._id);
-    setName(o.name);
-    setLocationDescription(o.locationDescription);
+  const handleUpdate = async () => {
+    if (!name || !locationDescription || !editingId) {
+      Alert.alert("Validation Error", "Please fill all fields");
+      return;
+    }
+
+    try {
+      await updateOutlet(editingId, { name, locationDescription });
+      setName("");
+      setLocationDescription("");
+      setEditingId(null);
+      Alert.alert("Success", "Outlet updated! ✅");
+      fetchOutlets();
+    } catch (error) {
+      Alert.alert("Error", "Failed to update outlet");
+      console.error("Failed to update outlet", error);
+    }
   };
 
-  const confirmDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     Alert.alert("Delete Outlet", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteOutlet(id);
-          loadOutlets();
+          try {
+            await deleteOutlet(id);
+            Alert.alert("Success", "Outlet deleted! ✅");
+            fetchOutlets();
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete outlet");
+            console.error("Failed to delete outlet", error);
+          }
         },
       },
     ]);
   };
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
-        <Text style={{ marginTop: 8, color: theme.text }}>
-          Loading outlets...
-        </Text>
-        <ModeSwitcher />
-      </View>
-    );
-  }
+  const handleEditStart = (outlet: any) => {
+    setEditingId(outlet._id);
+    setName(outlet.name);
+    setLocationDescription(outlet.locationDescription);
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setName("");
+    setLocationDescription("");
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.container}>
-          
-          {/* HEADER */}
-          <Text style={[styles.title, { color: theme.text }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+      <View style={styles.container}>
+        <TopBar title="Outlets" />
+
+        {/* FORM CARD */}
+        <Card>
+          <Text style={[styles.formTitle, { color: theme.text }]}>
             {editingId ? "Edit Outlet" : "Create Outlet"}
           </Text>
 
-          {/* FORM */}
-          <View
+          <TextInput
+            placeholder="Outlet Name"
+            placeholderTextColor={theme.subtext}
+            value={name}
+            onChangeText={setName}
             style={[
-              styles.card,
+              styles.input,
               {
-                backgroundColor: theme.card,
+                color: theme.text,
+                backgroundColor: theme.bg,
                 borderColor: theme.border,
               },
             ]}
-          >
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Outlet Name"
-              placeholderTextColor={theme.subtext}
-              style={[
-                styles.input,
-                {
-                  color: theme.text,
-                  borderColor: theme.border,
-                  backgroundColor: theme.background,
-                },
-              ]}
-            />
+          />
 
-            <TextInput
-              value={locationDescription}
-              onChangeText={setLocationDescription}
-              placeholder="Location Description"
-              placeholderTextColor={theme.subtext}
-              style={[
-                styles.input,
-                {
-                  color: theme.text,
-                  borderColor: theme.border,
-                  backgroundColor: theme.background,
-                },
-              ]}
-            />
+          <TextInput
+            placeholder="Location Description"
+            placeholderTextColor={theme.subtext}
+            value={locationDescription}
+            onChangeText={setLocationDescription}
+            style={[
+              styles.input,
+              {
+                color: theme.text,
+                backgroundColor: theme.bg,
+                borderColor: theme.border,
+              },
+            ]}
+          />
 
-            <Pressable
-              onPress={handleSubmit}
-              disabled={!isValid}
-              style={({ pressed }) => [
-                styles.button,
-                {
-                  backgroundColor: theme.primary,
-                  opacity: !isValid ? 0.4 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
-                },
-              ]}
-            >
-              <Text style={styles.buttonText}>
-                {editingId ? "Update Outlet" : "Create Outlet"}
-              </Text>
-            </Pressable>
+          {/* ACTION BUTTONS */}
+          <View style={styles.buttonRow}>
+            <View style={{ flex: 1 }}>
+              <GradientButton
+                title={editingId ? "Update Outlet" : "Create Outlet"}
+                onPress={editingId ? handleUpdate : handleCreate}
+              />
+            </View>
+            {editingId && (
+              <Pressable
+                onPress={handleEditCancel}
+                style={[styles.cancelBtn, { borderColor: theme.border }]}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            )}
           </View>
+        </Card>
 
-          {/* LIST */}
-          {outlets.map((o) => (
-            <View
-              key={o._id}
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
+        {/* OUTLETS LIST */}
+        <FlatList
+          data={outlets}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={{ paddingBottom: 120 }}
+          ListEmptyComponent={
+            <Text style={{ textAlign: "center", color: theme.subtext }}>
+              No outlets yet
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <Card>
               <Text style={[styles.name, { color: theme.text }]}>
-                {o.name}
+                {item.name}
               </Text>
 
-              <Text style={[styles.meta, { color: theme.subtext }]}>
-                📍 {o.locationDescription}
+              <Text style={{ color: theme.subtext, marginBottom: 12 }}>
+                📍 {item.locationDescription}
               </Text>
 
-              <View style={styles.actionRow}>
+              <View style={styles.cardActions}>
                 <Pressable
-                  onPress={() => handleEdit(o)}
-                  style={({ pressed }) => [
-                    styles.editButton,
-                    { transform: [{ scale: pressed ? 0.95 : 1 }] },
-                  ]}
+                  onPress={() => handleEditStart(item)}
+                  style={[styles.editBtn, { borderColor: theme.primary }]}
                 >
-                  <Text style={styles.editText}>Edit</Text>
+                  <Text style={{ color: theme.primary, fontWeight: "600" }}>
+                    Edit
+                  </Text>
                 </Pressable>
-
                 <Pressable
-                  onPress={() => confirmDelete(o._id)}
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    { transform: [{ scale: pressed ? 0.95 : 1 }] },
-                  ]}
+                  onPress={() => handleDelete(item._id)}
+                  style={styles.deleteBtn}
                 >
                   <Text style={styles.deleteText}>Delete</Text>
                 </Pressable>
               </View>
-            </View>
-          ))}
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+            </Card>
+          )}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-
-  centered: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    paddingHorizontal: 16,
   },
 
-  title: {
-  fontSize: 24,
-  fontWeight: "700",
-  marginBottom: 12,
-},
-
-  card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
+  formTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 12,
   },
 
   input: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
-  button: {
-    paddingVertical: 14,
-    borderRadius: 12,
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
     alignItems: "center",
   },
 
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
+  cancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
   },
 
   name: {
     fontSize: 16,
     fontWeight: "700",
+    marginBottom: 6,
   },
 
-  meta: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-
-  actionRow: {
+  cardActions: {
     flexDirection: "row",
-    marginTop: 12,
+    gap: 10,
   },
 
-  editButton: {
+  editBtn: {
+    flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    backgroundColor: "#e0ecff",
     borderRadius: 10,
-    marginRight: 8,
+    borderWidth: 2,
+    alignItems: "center",
   },
 
-  editText: {
-    color: "#2563eb",
-    fontWeight: "600",
-  },
-
-  deleteButton: {
+  deleteBtn: {
+    flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 14,
+    borderRadius: 10,
     backgroundColor: "#fee2e2",
-    borderRadius: 10,
+    alignItems: "center",
   },
 
   deleteText: {
     color: "#dc2626",
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });

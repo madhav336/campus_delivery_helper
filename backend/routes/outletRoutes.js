@@ -26,7 +26,7 @@ router.put('/:id', async (req, res) => {
     const updatedOutlet = await Outlet.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!updatedOutlet) {
@@ -48,6 +48,18 @@ router.delete('/:id', async (req, res) => {
     }
 
     res.json({ message: "Outlet deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/cleanup/all', async (req, res) => {
+  try {
+    const result = await Outlet.deleteMany({});
+    res.json({
+      message: "All outlets deleted",
+      deleted: result.deletedCount
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
