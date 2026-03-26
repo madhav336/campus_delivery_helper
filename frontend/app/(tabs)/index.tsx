@@ -60,9 +60,16 @@ export default function RequestsScreen() {
   };
 
   const handleEdit = (request: DeliveryRequest) => {
-    router.push(
-      `/edit/${request._id}?item=${request.itemDescription}&outlet=${request.outlet}&hostel=${request.hostel}&fee=${request.fee}`
-    );
+    router.push({
+      pathname: "/edit/[id]",
+      params: {
+        id: request._id,
+        item: request.itemDescription,
+        outlet: request.outlet,
+        hostel: request.hostel,
+        fee: request.fee,
+      },
+    } as any);
   };
 
   const handleAccept = async (id: string) => {
