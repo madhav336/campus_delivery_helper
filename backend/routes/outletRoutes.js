@@ -26,7 +26,7 @@ router.put('/:id', async (req, res) => {
     const updatedOutlet = await Outlet.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
 
     if (!updatedOutlet) {

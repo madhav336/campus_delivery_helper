@@ -42,7 +42,7 @@ export default function ThemeSwitcherFab() {
         style={[
           styles.fab,
           {
-            backgroundColor: theme.primary,   // 🔥 dynamic color
+            backgroundColor: theme.primary,
             borderColor: theme.border,
           },
         ]}
@@ -56,7 +56,7 @@ export default function ThemeSwitcherFab() {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 50,
+    bottom: 100,
     right: 16,
     alignItems: "flex-end",
     zIndex: 999,

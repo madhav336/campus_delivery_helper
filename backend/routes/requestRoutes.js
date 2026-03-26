@@ -40,7 +40,7 @@ router.put('/:id', async (req, res) => {
         const updatedRequest = await DeliveryRequest.findByIdAndUpdate(
             req.params.id,
             req.body,
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedRequest) {

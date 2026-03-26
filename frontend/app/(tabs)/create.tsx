@@ -8,13 +8,16 @@ import {
   Platform,
   TouchableWithoutFeedback,
   Keyboard,
+  Alert,
+  ScrollView,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { createRequest } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
-import ModeSwitcher from "@/components/ui/ModeSwitcher";
+import Card from "@/components/ui/Card";
+import TopBar from "@/components/ui/TopBar";
 
 export default function CreateScreen() {
   const router = useRouter();
@@ -26,151 +29,174 @@ export default function CreateScreen() {
   const [hostel, setHostel] = useState("");
   const [fee, setFee] = useState("");
 
+  const HARDCODED_USER_ID = "65f1a3b8c2d3e4f5a6b7c8d9";
+
   const isValid =
     item && hostel && (outlet !== "Other" || customOutlet) && Number(fee) > 0;
 
   const handleSubmit = async () => {
-    if (!isValid) return;
+    if (!isValid) {
+      Alert.alert("Validation Error", "Please fill all fields correctly");
+      return;
+    }
 
-    await createRequest({
-      itemDescription: item,
-      outlet: outlet === "Other" ? customOutlet : outlet,
-      hostel,
-      fee: Number(fee),
-    });
-
-    router.replace("/(tabs)");
+    try {
+      await createRequest({
+        itemDescription: item,
+        outlet: outlet === "Other" ? customOutlet : outlet,
+        hostel,
+        fee: Number(fee),
+        userId: HARDCODED_USER_ID,
+      });
+      
+      Alert.alert("Success", "Request created! ✅");
+      
+      // Reset form after successful creation
+      setItem("");
+      setOutlet("");
+      setCustomOutlet("");
+      setHostel("");
+      setFee("");
+      
+      // Navigate back to requests list
+      router.push("/(tabs)");
+    } catch (error) {
+      console.log("Error:", error);
+      Alert.alert("Error", "Failed to create request. Please try again.");
+    }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.container}>
-            
-            {/* ✅ TITLE FIXED */}
-            <Text style={[styles.title, { color: theme.text }]}>
-              Create Request
-            </Text>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 40 }}
+          >
+            <TopBar title="Create Request" />
 
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                },
-              ]}
-            >
-              {/* ITEM */}
-              <TextInput
-                placeholder="Item"
-                placeholderTextColor={theme.subtext}
-                value={item}
-                onChangeText={setItem}
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    borderColor: theme.border,
-                    backgroundColor: theme.background,
-                  },
-                ]}
-              />
-
-              {/* HOSTEL */}
-              <TextInput
-                placeholder="Hostel"
-                placeholderTextColor={theme.subtext}
-                value={hostel}
-                onChangeText={setHostel}
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    borderColor: theme.border,
-                    backgroundColor: theme.background,
-                  },
-                ]}
-              />
-
-              {/* OUTLET */}
-              <View style={styles.row}>
-                {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
-                  <Pressable
-                    key={o}
-                    onPress={() => setOutlet(o)}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor:
-                          outlet === o ? theme.primary : theme.card,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        color: outlet === o ? "#fff" : theme.text,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {o}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {/* CUSTOM */}
-              {outlet === "Other" && (
+            <View style={styles.container}>
+              <Card>
+                {/* ITEM */}
+                <Text style={[styles.label, { color: theme.text }]}>Item</Text>
                 <TextInput
-                  placeholder="Enter outlet name"
+                  placeholder="Item"
                   placeholderTextColor={theme.subtext}
-                  value={customOutlet}
-                  onChangeText={setCustomOutlet}
+                  value={item}
+                  onChangeText={setItem}
                   style={[
                     styles.input,
                     {
                       color: theme.text,
                       borderColor: theme.border,
-                      backgroundColor: theme.background,
+                      backgroundColor: theme.bg,
                     },
                   ]}
                 />
-              )}
 
-              {/* FEE */}
-              <TextInput
-                placeholder="Fee"
-                placeholderTextColor={theme.subtext}
-                value={fee}
-                onChangeText={setFee}
-                keyboardType="numeric"
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    borderColor: theme.border,
-                    backgroundColor: theme.background,
-                  },
-                ]}
-              />
+                {/* HOSTEL */}
+                <Text style={[styles.label, { color: theme.text }]}>Hostel</Text>
+                <TextInput
+                  placeholder="Hostel"
+                  placeholderTextColor={theme.subtext}
+                  value={hostel}
+                  onChangeText={setHostel}
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.bg,
+                    },
+                  ]}
+                />
 
-              {/* BUTTON */}
-              <Pressable
-                onPress={handleSubmit}
-                style={[
-                  styles.button,
-                  { backgroundColor: theme.primary },
-                ]}
-              >
-                <Text style={styles.buttonText}>Create</Text>
-              </Pressable>
+                {/* OUTLET */}
+                <Text style={[styles.label, { color: theme.text }]}>Select Outlet</Text>
+                <View style={styles.row}>
+                  {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
+                    <Pressable
+                      key={o}
+                      onPress={() => setOutlet(o)}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor:
+                            outlet === o ? theme.primary : theme.card,
+                          borderColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: outlet === o ? "#fff" : theme.text,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {o}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {/* CUSTOM */}
+                {outlet === "Other" && (
+                  <>
+                    <Text style={[styles.label, { color: theme.text }]}>
+                      Custom Outlet Name
+                    </Text>
+                    <TextInput
+                      placeholder="Enter outlet name"
+                      placeholderTextColor={theme.subtext}
+                      value={customOutlet}
+                      onChangeText={setCustomOutlet}
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+                  </>
+                )}
+
+                {/* FEE */}
+                <Text style={[styles.label, { color: theme.text }]}>Fee</Text>
+                <TextInput
+                  placeholder="Fee"
+                  placeholderTextColor={theme.subtext}
+                  value={fee}
+                  onChangeText={setFee}
+                  keyboardType="numeric"
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.bg,
+                    },
+                  ]}
+                />
+
+                {/* BUTTON */}
+                <Pressable
+                  onPress={handleSubmit}
+                  style={[
+                    styles.button,
+                    { backgroundColor: theme.primary },
+                  ]}
+                >
+                  <Text style={styles.buttonText}>Create Request</Text>
+                </Pressable>
+              </Card>
             </View>
-          </View>
+          </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -179,33 +205,29 @@ export default function CreateScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: 16,
   },
 
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 12,
-  },
-
-  card: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+    marginTop: 8,
   },
 
   input: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
+    fontSize: 14,
+    marginBottom: 4,
   },
 
   row: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 8,
   },
 
   chip: {
@@ -213,19 +235,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    marginRight: 6,
-    marginBottom: 6,
   },
 
   button: {
     padding: 14,
     borderRadius: 12,
     alignItems: "center",
-    marginTop: 6,
+    marginTop: 16,
   },
 
   buttonText: {
     color: "#fff",
     fontWeight: "700",
+    fontSize: 16,
   },
 });

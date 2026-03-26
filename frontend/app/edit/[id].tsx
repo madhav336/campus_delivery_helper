@@ -30,17 +30,20 @@ export default function EditScreen() {
   const [fee, setFee] = useState("");
 
   useEffect(() => {
-    setItem((params.item as string) || "");
-    const initialOutlet = (params.outlet as string) || "";
-    if (["ANC 1", "ANC 2", "CP"].includes(initialOutlet)) {
-      setOutlet(initialOutlet);
-    } else if (initialOutlet) {
-      setOutlet("Other");
-      setCustomOutlet(initialOutlet);
+    // Only initialize once when component mounts and we have an ID
+    if (id) {
+      setItem((params.item as string) || "");
+      const initialOutlet = (params.outlet as string) || "";
+      if (["ANC 1", "ANC 2", "CP"].includes(initialOutlet)) {
+        setOutlet(initialOutlet);
+      } else if (initialOutlet) {
+        setOutlet("Other");
+        setCustomOutlet(initialOutlet);
+      }
+      setHostel((params.hostel as string) || "");
+      setFee((params.fee as string) || "");
     }
-    setHostel((params.hostel as string) || "");
-    setFee((params.fee as string) || "");
-  }, [params]);
+  }, [id]);
 
   const finalOutlet = outlet === "Other" ? customOutlet : outlet;
 

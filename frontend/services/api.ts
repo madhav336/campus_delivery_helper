@@ -1,6 +1,6 @@
 import { DeliveryRequest } from "@/types/deliveryRequest";
 
-const BASE_URL = "http://172.16.137.73:5000/api";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://172.16.137.73:5000/api";
 
 /* ================= REQUESTS ================= */
 
@@ -17,19 +17,21 @@ export async function createRequest(data: {
   fee: number;
   userId: string;
 }): Promise<void> {
+  const { userId, ...requestData } = data;
   const response = await fetch(`${BASE_URL}/requests`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...requestData,
+      requestedBy: userId,
+    }),
   });
 
-  
-
   if (!response.ok) {
-  const text = await response.text();
-  console.log("BACKEND ERROR:", text);
-  throw new Error("Failed to create request");
-}
+    const text = await response.text();
+    console.log("BACKEND ERROR:", text);
+    throw new Error("Failed to create request");
+  }
 }
 
 export async function updateRequest(
@@ -89,7 +91,7 @@ export async function getUsers() {
 
 export async function createUser(data: {
   name: string;
-  role: "REQUESTER" | "DELIVERER";
+  role: "STUDENT" | "OUTLET_OWNER";
   hostel: string;
 }) {
   const res = await fetch(`${BASE_URL}/users`, {
@@ -104,7 +106,7 @@ export async function updateUser(
   id: string,
   data: {
     name: string;
-    role: "REQUESTER" | "DELIVERER";
+    role: "STUDENT" | "OUTLET_OWNER";
     hostel: string;
   }
 ) {
@@ -172,11 +174,19 @@ export async function getAvailability() {
   return res.json();
 }
 
-export async function createAvailability(data: { studentId: string; outlet: string; item: string }) {
+export async function createAvailability(data: {
+  userId: string;
+  outlet: string;
+  item: string;
+}) {
+  const { userId, ...availData } = data;
   const res = await fetch(`${BASE_URL}/availability`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      ...availData,
+      requestedBy: userId,
+    }),
   });
   if (!res.ok) throw new Error("Failed to create availability");
 }
@@ -188,4 +198,23 @@ export async function respondAvailability(id: string, status: 'AVAILABLE' | 'NOT
     body: JSON.stringify({ status }),
   });
   if (!res.ok) throw new Error("Failed to respond to availability");
+}
+
+export async function updateAvailability(
+  id: string,
+  data: { item: string; outlet: string }
+) {
+  const res = await fetch(`${BASE_URL}/availability/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update availability");
+}
+
+export async function deleteAvailability(id: string) {
+  const res = await fetch(`${BASE_URL}/availability/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete availability");
 }

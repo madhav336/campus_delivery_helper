@@ -1,4 +1,5 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
+import { useColorScheme } from "react-native";
 import { themes } from "@/theme/colors";
 
 type ThemeType = "default" | "dark" | "foodie" | "kopi";
@@ -7,8 +8,21 @@ type ModeType = "STUDENT" | "OUTLET" | "ADMIN";
 const ThemeContext = createContext<any>(null);
 
 export const ThemeProvider = ({ children }: any) => {
-  const [themeName, setThemeName] = useState<ThemeType>("default");
-  const [mode, setMode] = useState<ModeType>("STUDENT"); // ✅ ADD THIS
+  const systemColorScheme = useColorScheme();
+  // Start with system preference, or default if not available
+  const [themeName, setThemeName] = useState<ThemeType>(
+    systemColorScheme === "dark" ? "dark" : "default"
+  );
+  const [mode, setMode] = useState<ModeType>("STUDENT");
+
+  // Update theme when system appearance changes
+  useEffect(() => {
+    if (systemColorScheme === "dark") {
+      setThemeName("dark");
+    } else if (systemColorScheme === "light") {
+      setThemeName("default");
+    }
+  }, [systemColorScheme]);
 
   const theme = themes[themeName];
 
@@ -17,8 +31,9 @@ export const ThemeProvider = ({ children }: any) => {
       value={{
         theme,
         setTheme: setThemeName,
-        mode,        // ✅ ADD
-        setMode,     // ✅ ADD
+        mode,
+        setMode,
+        themeName,
       }}
     >
       {children}

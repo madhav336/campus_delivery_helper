@@ -1,6 +1,7 @@
 export const themes = {
   default: {
     background: "#f9fafb",
+    bg: "#f9fafb", // alias for background
     card: "#ffffff",
     text: "#111827",
     subtext: "#6b7280",
@@ -18,6 +19,7 @@ export const themes = {
 
   dark: {
     background: "#0f172a",
+    bg: "#0f172a", // alias for background
     card: "#1e293b",
     text: "#f1f5f9",
     subtext: "#94a3b8",
@@ -35,6 +37,7 @@ export const themes = {
 
   foodie: {
     background: "#fff7ed",
+    bg: "#fff7ed", // alias for background
     card: "#ffffff",
     text: "#7c2d12",
     subtext: "#9a3412",
@@ -52,6 +55,7 @@ export const themes = {
 
   kopi: {
     background: "#ecfdf5",
+    bg: "#ecfdf5", // alias for background
     card: "#ffffff",
     text: "#064e3b",
     subtext: "#065f46",

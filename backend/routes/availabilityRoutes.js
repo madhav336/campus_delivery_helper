@@ -69,6 +69,52 @@ router.put('/:id/respond', async (req, res) => {
 });
 
 
+// UPDATE (Edit item/outlet)
+router.put('/:id', async (req, res) => {
+    try {
+        const { item, outlet } = req.body;
+
+        const request = await AvailabilityRequest.findById(req.params.id);
+
+        if (!request) {
+            return res.status(404).json({ message: "Request not found" });
+        }
+
+        // Only allow editing if status is PENDING
+        if (request.status !== 'PENDING') {
+            return res.status(400).json({
+                message: "Can only edit pending requests"
+            });
+        }
+
+        if (item) request.item = item;
+        if (outlet) request.outlet = outlet;
+
+        await request.save();
+
+        res.json(request);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+
+// DELETE
+router.delete('/:id', async (req, res) => {
+    try {
+        const request = await AvailabilityRequest.findByIdAndDelete(req.params.id);
+
+        if (!request) {
+            return res.status(404).json({ message: "Request not found" });
+        }
+
+        res.json({ message: "Request deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 // CLEANUP
 router.delete('/cleanup/all', async (req, res) => {
     try {
