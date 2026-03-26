@@ -5,6 +5,6 @@ npm install
 npm run dev
 
 ## Frontend
-cd frontend  
+cd frontend                                             
 npm install
 npx expo start
