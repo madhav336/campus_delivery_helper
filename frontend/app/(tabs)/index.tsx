@@ -60,9 +60,10 @@ export default function RequestsScreen() {
   };
 
   const handleEdit = (request: DeliveryRequest) => {
-  console.log("Edit clicked:", request);
-  alert("Edit feature coming soon");
-};
+    router.push(
+      `/edit/${request._id}?item=${request.itemDescription}&outlet=${request.outlet}&hostel=${request.hostel}&fee=${request.fee}`
+    );
+  };
 
   const handleAccept = async (id: string) => {
     try {
