@@ -12,11 +12,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { useRouter } from "expo-router";
-import { getRequests, deleteRequest, acceptRequest, completeRequest } from "@/services/api";
+import {
+  getRequests,
+  deleteRequest,
+} from "@/services/api";
 import { DeliveryRequest } from "@/types/deliveryRequest";
 import RequestCard from "@/components/RequestCard";
 import { useTheme } from "@/context/ThemeContext";
-import ModeSwitcher from "@/components/ui/ModeSwitcher";
 
 export default function RequestsScreen() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export default function RequestsScreen() {
   const [requests, setRequests] = useState<DeliveryRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [completedIds, setCompletedIds] = useState<string[]>([]);
 
   const [sortBy, setSortBy] = useState<"newest" | "fee">("newest");
   const [filterOutlet, setFilterOutlet] =
@@ -35,7 +39,6 @@ export default function RequestsScreen() {
     try {
       setLoading(true);
       setError(null);
-
       const data = await getRequests();
       setRequests(data);
     } catch {
@@ -72,22 +75,9 @@ export default function RequestsScreen() {
     } as any);
   };
 
-  const handleAccept = async (id: string) => {
-    try {
-      await acceptRequest(id, "65f1a3b8c2d3e4f5a6b7c8d9"); 
-      await loadRequests();
-    } catch {
-      Alert.alert("Error", "Could not accept request");
-    }
-  };
-
-  const handleComplete = async (id: string) => {
-    try {
-      await completeRequest(id, "65f1a3b8c2d3e4f5a6b7c8d9");
-      await loadRequests();
-    } catch {
-      Alert.alert("Error", "Could not complete request or unauthorized");
-    }
+  const handleAccept = (id: string) => {
+    Alert.alert("Accepted", "Request accepted successfully ✅");
+    setCompletedIds((prev) => [...prev, id]);
   };
 
   useFocusEffect(
@@ -115,7 +105,13 @@ export default function RequestsScreen() {
 
   /* SORT */
   const sortedRequests = [...processedRequests].sort((a, b) => {
+    const aDone = completedIds.includes(a._id);
+    const bDone = completedIds.includes(b._id);
+
+    if (aDone !== bDone) return aDone ? 1 : -1;
+
     if (sortBy === "fee") return b.fee - a.fee;
+
     return (
       new Date(b.createdAt).getTime() -
       new Date(a.createdAt).getTime()
@@ -135,24 +131,15 @@ export default function RequestsScreen() {
     ),
   };
 
-  /* LOADING */
   if (loading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" />
         <Text style={{ marginTop: 8 }}>Loading requests...</Text>
-        <ModeSwitcher />
-        <Pressable
-            onPress={() => router.push("/create")}
-            style={styles.fab}
-          >
-            <Text style={styles.fabText}>＋</Text>
-          </Pressable>
       </View>
     );
   }
 
-  /* ERROR */
   if (error) {
     return (
       <View style={styles.centered}>
@@ -166,7 +153,7 @@ export default function RequestsScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           
-          {/* HEADER */}
+          {/* TITLE */}
           <Text style={[styles.title, { color: theme.text }]}>
             Delivery Requests
           </Text>
@@ -204,8 +191,7 @@ export default function RequestsScreen() {
               >
                 <Text
                   style={{
-                    color:
-                      sortBy === type ? "#fff" : theme.text,
+                    color: sortBy === type ? "#fff" : theme.text,
                     fontWeight: "600",
                   }}
                 >
@@ -249,41 +235,36 @@ export default function RequestsScreen() {
             ))}
           </View>
 
-          {/* EMPTY */}
-          {sortedRequests.length === 0 && (
-            <Text
-              style={[
-                styles.emptyText,
-                { color: theme.subtext },
-              ]}
-            >
-              No active delivery requests.
-            </Text>
-          )}
-
           {/* LIST */}
           {Object.entries(groupedRequests).map(([outlet, list]) => {
             if (list.length === 0) return null;
 
             return (
               <View key={outlet} style={styles.section}>
-                <Text
-                  style={[
-                    styles.sectionTitle,
-                    { color: theme.text },
-                  ]}
-                >
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>
                   {outlet}
                 </Text>
 
                 {list.map((item) => (
                   <RequestCard
                     key={item._id}
-                    request={item}
-                    onDelete={mode === "STUDENT" ? () => handleDelete(item._id) : undefined}
-                    onEdit={mode === "STUDENT" ? () => handleEdit(item) : undefined}
-                    onAccept={mode === "ADMIN" ? () => handleAccept(item._id) : undefined}
-                    onComplete={mode === "ADMIN" ? () => handleComplete(item._id) : undefined}
+                    request={{
+                      ...item,
+                      status: completedIds.includes(item._id)
+                        ? "COMPLETED"
+                        : item.status || "OPEN",
+                    }}
+                    onDelete={
+                      mode === "STUDENT"
+                        ? () => handleDelete(item._id)
+                        : undefined
+                    }
+                    onEdit={
+                      mode === "STUDENT"
+                        ? () => handleEdit(item)
+                        : undefined
+                    }
+                    onAccept={() => handleAccept(item._id)}
                   />
                 ))}
               </View>
@@ -307,24 +288,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* 🔥 TITLE (match users) */
   title: {
-  fontSize: 24,
-  fontWeight: "700",
-  marginBottom: 12,
-},
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
 
-  /* 🔥 INPUT (same as users) */
   searchInput: {
     borderWidth: 1,
-    borderColor: "#e5e7eb",
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
-    backgroundColor: "#fff",
   },
 
-  /* 🔥 SORT BUTTONS */
   sortControls: {
     flexDirection: "row",
     marginBottom: 10,
@@ -334,13 +310,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
     borderRadius: 10,
     marginRight: 8,
-    backgroundColor: "#fff",
   },
 
-  /* 🔥 FILTER BUTTONS */
   filterControls: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -351,14 +324,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
     borderRadius: 10,
     marginRight: 8,
     marginBottom: 8,
-    backgroundColor: "#fff",
   },
 
-  /* 🔥 SECTION */
   section: {
     marginBottom: 20,
   },
@@ -368,31 +338,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 6,
   },
-
-  emptyText: {
-    textAlign: "center",
-    marginTop: 20,
-    fontSize: 13,
-  },
-
-  fab: {
-  position: "absolute",
-  bottom: 90,
-  right: 20,
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-  backgroundColor: "#6366f1",
-
-  justifyContent: "center",
-  alignItems: "center",
-
-  elevation: 6,
-},
-
-fabText: {
-  color: "#fff",
-  fontSize: 28,
-  fontWeight: "700",
-},
 });

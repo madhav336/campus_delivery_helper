@@ -1,6 +1,6 @@
 import { DeliveryRequest } from "@/types/deliveryRequest";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.13.121.251:5000/api";
+const BASE_URL = "http://172.16.137.73:5000/api";
 
 /* ================= REQUESTS ================= */
 
@@ -15,6 +15,7 @@ export async function createRequest(data: {
   outlet: string;
   hostel: string;
   fee: number;
+  userId: string;
 }): Promise<void> {
   const response = await fetch(`${BASE_URL}/requests`, {
     method: "POST",
@@ -24,7 +25,11 @@ export async function createRequest(data: {
 
   
 
-  if (!response.ok) throw new Error("Failed to create request");
+  if (!response.ok) {
+  const text = await response.text();
+  console.log("BACKEND ERROR:", text);
+  throw new Error("Failed to create request");
+}
 }
 
 export async function updateRequest(

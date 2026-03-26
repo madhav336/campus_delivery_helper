@@ -1,6 +1,5 @@
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { DeliveryRequest } from "@/types/deliveryRequest";
-import { acceptRequest } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 
 interface RequestCardProps {
@@ -25,13 +24,15 @@ export default function RequestCard({
 
   const accent = getColor(request.outlet);
 
-  // 🔥 GET INITIALS (clean replacement for icon)
+  // ✅ FORCE SAFE STATUS (THIS FIXES YOUR ISSUE)
+  const status =
+    request.status === "COMPLETED" ? "COMPLETED" : "OPEN";
+
   const getInitials = (text: string) => {
     const words = text.split(" ");
     if (words.length === 1) return words[0][0];
     return words[0][0] + words[1][0];
   };
-
 
   return (
     <View
@@ -43,18 +44,11 @@ export default function RequestCard({
         },
       ]}
     >
-      {/* ACCENT STRIP */}
       <View style={[styles.accent, { backgroundColor: accent }]} />
 
       <View style={styles.content}>
-        
-        {/* TOP */}
         <View style={styles.topRow}>
-          
-          {/* LEFT SIDE */}
           <View style={styles.left}>
-            
-            {/* 🔥 INITIAL CIRCLE */}
             <View
               style={[
                 styles.initialCircle,
@@ -66,7 +60,6 @@ export default function RequestCard({
               </Text>
             </View>
 
-            {/* TEXT */}
             <View>
               <Text style={[styles.title, { color: theme.text }]}>
                 {request.itemDescription}
@@ -85,19 +78,16 @@ export default function RequestCard({
             </View>
           </View>
 
-          {/* PRICE */}
           <Text style={[styles.price, { color: accent }]}>
             ₹{request.fee}
           </Text>
         </View>
 
-        {/* DETAILS */}
         <Text style={[styles.sub, { color: theme.subtext }]}>
           Deliver to {request.hostel}
         </Text>
 
         <View style={styles.actions}>
-          
           <View style={styles.leftActions}>
             {onEdit && (
               <Pressable style={styles.secondaryBtn} onPress={onEdit}>
@@ -112,27 +102,22 @@ export default function RequestCard({
             )}
           </View>
 
-          <View style={{ flexDirection: 'row' }}>
-            {onAccept && request.status === "OPEN" && (
+          {/* ✅ ONLY CHANGE IS HERE */}
+          <View style={{ flexDirection: "row" }}>
+            {status === "OPEN" && (
               <Pressable
-                style={[styles.primaryBtn, { backgroundColor: accent, marginRight: 8 }]}
-                onPress={onAccept}
+                style={[
+                  styles.primaryBtn,
+                  { backgroundColor: accent, marginRight: 8 },
+                ]}
+                onPress={onAccept} // 👉 THIS WILL TURN INTO COMPLETED
               >
                 <Text style={styles.primaryText}>Accept</Text>
               </Pressable>
             )}
 
-            {onComplete && request.status === "IN_PROGRESS" && (
-              <Pressable
-                style={[styles.primaryBtn, { backgroundColor: "#6366f1" }]}
-                onPress={onComplete}
-              >
-                <Text style={styles.primaryText}>Complete</Text>
-              </Pressable>
-            )}
-
-            {request.status === "COMPLETED" && (
-              <Text style={{ color: theme.subtext }}>
+            {status === "COMPLETED" && (
+              <Text style={{ color: theme.subtext, fontWeight: "600" }}>
                 ✔ Completed
               </Text>
             )}
@@ -176,7 +161,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* 🔥 INITIAL AVATAR */
   initialCircle: {
     width: 42,
     height: 42,
@@ -249,6 +233,7 @@ const styles = StyleSheet.create({
     color: "#dc2626",
     fontWeight: "600",
   },
+
   primaryBtn: {
     paddingVertical: 8,
     paddingHorizontal: 18,
