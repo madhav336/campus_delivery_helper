@@ -1,220 +1,318 @@
-import { DeliveryRequest } from "@/types/deliveryRequest";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://172.16.137.73:5000/api";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.16.137.73:5000/api';
 
-/* ================= REQUESTS ================= */
+// ============= AUTH SERVICE =============
 
-export async function getRequests(): Promise<DeliveryRequest[]> {
-  const response = await fetch(`${BASE_URL}/requests`);
-  if (!response.ok) throw new Error("Failed to fetch requests");
-  return response.json();
-}
+export const auth = {
+  async signup(role: 'student' | 'outlet_owner', data: any) {
+    const response = await fetch(`${BASE_URL}/auth/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, role })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Signup failed');
+    }
+    const result = await response.json();
+    await AsyncStorage.setItem('token', result.token);
+    await AsyncStorage.setItem('user', JSON.stringify(result.user));
+    return result;
+  },
 
-export async function createRequest(data: {
-  itemDescription: string;
-  outlet: string;
-  hostel: string;
-  fee: number;
-  userId: string;
-}): Promise<void> {
-  const { userId, ...requestData } = data;
-  const response = await fetch(`${BASE_URL}/requests`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...requestData,
-      requestedBy: userId,
-    }),
-  });
+  async login(email: string, password: string) {
+    const response = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Login failed');
+    }
+    const result = await response.json();
+    await AsyncStorage.setItem('token', result.token);
+    await AsyncStorage.setItem('user', JSON.stringify(result.user));
+    return result;
+  },
 
-  if (!response.ok) {
-    const text = await response.text();
-    console.log("BACKEND ERROR:", text);
-    throw new Error("Failed to create request");
+  async logout() {
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('user');
+  },
+
+  async getToken() {
+    return await AsyncStorage.getItem('token');
   }
+};
+
+// Helper to add auth header
+async function getHeaders() {
+  const token = await auth.getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` })
+  };
 }
 
-export async function updateRequest(
-  id: string,
-  data: {
-    itemDescription: string;
-    outlet: string;
-    hostel: string;
-    fee: number;
+// ============= DELIVERY REQUESTS =============
+
+export const requests = {
+  async create(itemDescription: string, outlet: string, hostel: string, fee: number) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ itemDescription, outlet, hostel, fee })
+    });
+    if (!response.ok) throw new Error('Failed to create request');
+    return response.json();
+  },
+
+  async getAll(filter: 'all' | 'own' | 'inprogress' | 'completed' = 'all', query?: string) {
+    const headers = await getHeaders();
+    const url = new URL(`${BASE_URL}/requests`);
+    url.searchParams.append('filter', filter);
+    if (query) url.searchParams.append('query', query);
+    
+    const response = await fetch(url.toString(), { headers });
+    if (!response.ok) throw new Error('Failed to fetch requests');
+    return response.json();
+  },
+
+  async getById(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/${id}`, { headers });
+    if (!response.ok) throw new Error('Request not found');
+    return response.json();
+  },
+
+  async accept(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/${id}/accept`, {
+      method: 'PUT',
+      headers
+    });
+    if (!response.ok) throw new Error('Failed to accept request');
+    return response.json();
+  },
+
+  async complete(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/${id}/complete`, {
+      method: 'PUT',
+      headers
+    });
+    if (!response.ok) throw new Error('Failed to complete request');
+    return response.json();
+  },
+
+  async rate(id: string, rating: number, feedback?: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/${id}/rate`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ rating, feedback })
+    });
+    if (!response.ok) throw new Error('Failed to rate request');
+    return response.json();
+  },
+
+  async update(id: string, data: any) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to update request');
+    return response.json();
+  },
+
+  async delete(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!response.ok) throw new Error('Failed to delete request');
+    return response.json();
   }
-): Promise<void> {
-  const response = await fetch(`${BASE_URL}/requests/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+};
 
-  if (!response.ok) throw new Error("Failed to update request");
-}
+// ============= AVAILABILITY REQUESTS =============
 
-export async function deleteRequest(id: string): Promise<void> {
-  const response = await fetch(`${BASE_URL}/requests/${id}`, {
-    method: "DELETE",
-  });
+export const availability = {
+  async create(itemName: string, outlet: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ itemName, outlet })
+    });
+    if (!response.ok) throw new Error('Failed to create availability request');
+    return response.json();
+  },
 
-  if (!response.ok) throw new Error("Failed to delete request");
-}
-export async function acceptRequest(id: string, userId: string): Promise<void> {
-  const response = await fetch(`${BASE_URL}/requests/${id}/accept`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  if (!response.ok) throw new Error("Failed to accept");
-}
+  async getOwn() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability?filter=own`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch own requests');
+    return response.json();
+  },
 
-export async function completeRequest(id: string, userId: string): Promise<void> {
-  const response = await fetch(`${BASE_URL}/requests/${id}/complete`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
-  });
-  if (!response.ok) throw new Error("Failed to complete");
-}
+  async getPublic() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability?filter=public`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch public requests');
+    return response.json();
+  },
 
+  async getPending() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability/pending/all`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch pending requests');
+    return response.json();
+  },
 
+  async respond(id: string, available: boolean) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability/${id}/respond`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ available })
+    });
+    if (!response.ok) throw new Error('Failed to respond');
+    return response.json();
+  },
 
+  async update(id: string, itemName: string, outlet: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ itemName, outlet })
+    });
+    if (!response.ok) throw new Error('Failed to update');
+    return response.json();
+  },
 
-
-/* ================= USERS ================= */
-
-export async function getUsers() {
-  const res = await fetch(`${BASE_URL}/users`);
-  if (!res.ok) throw new Error("Failed to fetch users");
-  return res.json();
-}
-
-export async function createUser(data: {
-  name: string;
-  role: "STUDENT" | "OUTLET_OWNER";
-  hostel: string;
-}) {
-  const res = await fetch(`${BASE_URL}/users`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to create user");
-}
-
-export async function updateUser(
-  id: string,
-  data: {
-    name: string;
-    role: "STUDENT" | "OUTLET_OWNER";
-    hostel: string;
+  async delete(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!response.ok) throw new Error('Failed to delete');
+    return response.json();
   }
-) {
-  const res = await fetch(`${BASE_URL}/users/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to update user");
-}
+};
 
-export async function deleteUser(id: string) {
-  const res = await fetch(`${BASE_URL}/users/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete user");
-}
+// ============= USERS =============
 
-/* ================= OUTLETS ================= */
+export const users = {
+  async getMe() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/users/me`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch profile');
+    return response.json();
+  },
 
-export async function getOutlets() {
-  const res = await fetch(`${BASE_URL}/outlets`);
-  if (!res.ok) throw new Error("Failed to fetch outlets");
-  return res.json();
-}
+  async getById(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/users/${id}`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch user');
+    return response.json();
+  },
 
-export async function createOutlet(data: {
-  name: string;
-  locationDescription: string;
-}) {
-  const res = await fetch(`${BASE_URL}/outlets`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to create outlet");
-}
+  async updateProfile(phone?: string, hostel?: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/users/me`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ phone, hostel })
+    });
+    if (!response.ok) throw new Error('Failed to update profile');
+    return response.json();
+  },
 
-export async function updateOutlet(
-  id: string,
-  data: {
-    name: string;
-    locationDescription: string;
+  async getAll(role?: string) {
+    const headers = await getHeaders();
+    const url = new URL(`${BASE_URL}/users`);
+    if (role) url.searchParams.append('role', role);
+    
+    const response = await fetch(url.toString(), { headers });
+    if (!response.ok) throw new Error('Failed to fetch users');
+    return response.json();
+  },
+
+  async delete(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/users/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!response.ok) throw new Error('Failed to delete user');
+    return response.json();
   }
-) {
-  const res = await fetch(`${BASE_URL}/outlets/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to update outlet");
-}
+};
 
-export async function deleteOutlet(id: string) {
-  const res = await fetch(`${BASE_URL}/outlets/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete outlet");
-}
-/* ================= AVAILABILITY ================= */
+// ============= OUTLETS =============
 
-export async function getAvailability() {
-  const res = await fetch(`${BASE_URL}/availability`);
-  if (!res.ok) throw new Error("Failed to fetch availability");
-  return res.json();
-}
+export const outlets = {
+  async getAll() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/outlets`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch outlets');
+    return response.json();
+  },
 
-export async function createAvailability(data: {
-  userId: string;
-  outlet: string;
-  item: string;
-}) {
-  const { userId, ...availData } = data;
-  const res = await fetch(`${BASE_URL}/availability`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...availData,
-      requestedBy: userId,
-    }),
-  });
-  if (!res.ok) throw new Error("Failed to create availability");
-}
+  async getById(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/outlets/${id}`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch outlet');
+    return response.json();
+  }
+};
 
-export async function respondAvailability(id: string, status: 'AVAILABLE' | 'NOT_AVAILABLE') {
-  const res = await fetch(`${BASE_URL}/availability/${id}/respond`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) throw new Error("Failed to respond to availability");
-}
+// ============= ANALYTICS =============
 
-export async function updateAvailability(
-  id: string,
-  data: { item: string; outlet: string }
-) {
-  const res = await fetch(`${BASE_URL}/availability/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to update availability");
-}
+export const analytics = {
+  async getSummary() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/analytics/summary`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch summary');
+    return response.json();
+  },
 
-export async function deleteAvailability(id: string) {
-  const res = await fetch(`${BASE_URL}/availability/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete availability");
-}
+  async getRequestsTrend(days: number = 30) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/analytics/requests-over-time?days=${days}`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch requests trend');
+    return response.json();
+  },
+
+  async getUsersTrend(days: number = 30) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/analytics/users-over-time?days=${days}`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch users trend');
+    return response.json();
+  },
+
+  async getApiUsage() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/analytics/api-usage`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch API usage');
+    return response.json();
+  },
+
+  async getLeaderboard() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/analytics/leaderboard`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch leaderboard');
+    return response.json();
+  }
+};
+
+export default { auth, requests, availability, users, outlets, analytics };

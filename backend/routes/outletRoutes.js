@@ -1,68 +1,128 @@
 const express = require('express');
-const router = express.Router();
 const Outlet = require('../models/Outlet');
+const AvailabilityRequest = require('../models/AvailabilityRequest');
+const { verifyToken, requireRole } = require('../middleware/auth');
 
-// CREATE outlet
-router.post('/', async (req, res) => {
-  try {
-    const outlet = await Outlet.create(req.body);
-    res.status(201).json(outlet);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+const router = express.Router();
 
-// GET all outlets
-router.get('/', async (req, res) => {
+/**
+ * GET /api/outlets
+ * Get all outlets
+ */
+router.get('/', verifyToken, async (req, res) => {
   try {
     const outlets = await Outlet.find();
-    res.json(outlets);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-router.put('/:id', async (req, res) => {
-  try {
-    const updatedOutlet = await Outlet.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { returnDocument: 'after', runValidators: true }
+
+    // Add stats
+    const outletsWithStats = await Promise.all(
+      outlets.map(async (outlet) => {
+        const requestsCount = await AvailabilityRequest.countDocuments({
+          outlet: outlet.name
+        });
+        return {
+          ...outlet.toObject(),
+          requestsCount
+        };
+      })
     );
 
-    if (!updatedOutlet) {
-      return res.status(404).json({ message: "Outlet not found" });
-    }
-
-    res.json(updatedOutlet);
+    res.json({ outlets: outletsWithStats });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
-router.delete('/:id', async (req, res) => {
+/**
+ * GET /api/outlets/:id
+ * Get single outlet
+ */
+router.get('/:id', verifyToken, async (req, res) => {
   try {
-    const deletedOutlet = await Outlet.findByIdAndDelete(req.params.id);
+    const outlet = await Outlet.findById(req.params.id);
 
-    if (!deletedOutlet) {
-      return res.status(404).json({ message: "Outlet not found" });
+    if (!outlet) {
+      return res.status(404).json({ message: 'Outlet not found' });
     }
 
-    res.json({ message: "Outlet deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    const requestsCount = await AvailabilityRequest.countDocuments({
+      outlet: outlet.name
+    });
 
-router.delete('/cleanup/all', async (req, res) => {
-  try {
-    const result = await Outlet.deleteMany({});
     res.json({
-      message: "All outlets deleted",
-      deleted: result.deletedCount
+      outlet: {
+        ...outlet.toObject(),
+        requestsCount
+      }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
+/**
+ * POST /api/outlets
+ * Create outlet (admin only)
+ */
+router.post('/', verifyToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, locationDescription } = req.body;
+
+    if (!name || !locationDescription) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const outlet = new Outlet({
+      name,
+      locationDescription,
+      isActive: true
+    });
+
+    await outlet.save();
+    res.status(201).json({ message: 'Outlet created', outlet });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * PUT /api/outlets/:id
+ * Update outlet (admin only)
+ */
+router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
+  try {
+    const outlet = await Outlet.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!outlet) {
+      return res.status(404).json({ message: 'Outlet not found' });
+    }
+
+    res.json({ message: 'Outlet updated', outlet });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/outlets/:id
+ * Delete outlet (admin only)
+ */
+router.delete('/:id', verifyToken, requireRole('admin'), async (req, res) => {
+  try {
+    const outlet = await Outlet.findByIdAndDelete(req.params.id);
+
+    if (!outlet) {
+      return res.status(404).json({ message: 'Outlet not found' });
+    }
+
+    res.json({ message: 'Outlet deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;
 

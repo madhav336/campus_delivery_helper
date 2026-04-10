@@ -138,7 +138,7 @@ export default function UsersScreen() {
           />
 
           <TextInput
-            placeholder="Hostel"
+            placeholder={role === "OUTLET_OWNER" ? "Outlet" : "Hostel"}
             placeholderTextColor={theme.subtext}
             value={hostel}
             onChangeText={setHostel}
@@ -220,7 +220,7 @@ export default function UsersScreen() {
                 Role: {item.role}
               </Text>
               <Text style={{ color: theme.subtext, marginBottom: 12 }}>
-                Hostel: {item.hostel}
+                {item.role === "OUTLET_OWNER" ? "Outlet" : "Hostel"}: {item.hostel}
               </Text>
 
               <View style={styles.cardActions}>
