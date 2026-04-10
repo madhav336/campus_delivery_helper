@@ -18,7 +18,6 @@ import { useTheme } from "@/context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "@/components/ui/Card";
 import TopBar from "@/components/ui/TopBar";
-import GradientButton from "@/components/ui/GradientButton";
 
 export default function CreateScreen() {
   const router = useRouter();
@@ -48,16 +47,16 @@ export default function CreateScreen() {
         hostel,
         Number(fee)
       );
-      
+
       Alert.alert("Success", "Request created! ✅");
-      
+
       // Reset form
       setItem("");
       setOutlet("");
       setCustomOutlet("");
       setHostel("");
       setFee("");
-      
+
       // Navigate back
       router.push("/(tabs)");
     } catch (error: any) {
@@ -83,7 +82,9 @@ export default function CreateScreen() {
             <View style={styles.container}>
               <Card>
                 {/* ITEM */}
-                <Text style={[styles.label, { color: theme.text }]}>Item Description</Text>
+                <Text style={[styles.label, { color: theme.text }]}>
+                  Item Description
+                </Text>
                 <TextInput
                   placeholder="What do you need?"
                   placeholderTextColor={theme.subtext}
@@ -252,108 +253,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-  },
-});
-
-                    </Text>
-                    <TextInput
-                      placeholder="Enter outlet name"
-                      placeholderTextColor={theme.subtext}
-                      value={customOutlet}
-                      onChangeText={setCustomOutlet}
-                      style={[
-                        styles.input,
-                        {
-                          color: theme.text,
-                          borderColor: theme.border,
-                          backgroundColor: theme.bg,
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-
-                {/* FEE */}
-                <Text style={[styles.label, { color: theme.text }]}>Fee</Text>
-                <TextInput
-                  placeholder="Fee"
-                  placeholderTextColor={theme.subtext}
-                  value={fee}
-                  onChangeText={setFee}
-                  keyboardType="numeric"
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      borderColor: theme.border,
-                      backgroundColor: theme.bg,
-                    },
-                  ]}
-                />
-
-                {/* BUTTON */}
-                <Pressable
-                  onPress={handleSubmit}
-                  style={[
-                    styles.button,
-                    { backgroundColor: theme.primary },
-                  ]}
-                >
-                  <Text style={styles.buttonText}>Create Request</Text>
-                </Pressable>
-              </Card>
-            </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 8,
-  },
-
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    marginBottom: 4,
-  },
-
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 12,
-    gap: 8,
-  },
-
-  chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-
-  button: {
-    padding: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 16,
-  },
-
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
   },
 });
