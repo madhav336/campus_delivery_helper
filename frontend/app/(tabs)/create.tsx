@@ -13,11 +13,12 @@ import {
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { createRequest } from "@/services/api";
+import { requests } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "@/components/ui/Card";
 import TopBar from "@/components/ui/TopBar";
+import GradientButton from "@/components/ui/GradientButton";
 
 export default function CreateScreen() {
   const router = useRouter();
@@ -28,8 +29,7 @@ export default function CreateScreen() {
   const [customOutlet, setCustomOutlet] = useState("");
   const [hostel, setHostel] = useState("");
   const [fee, setFee] = useState("");
-
-  const HARDCODED_USER_ID = "65f1a3b8c2d3e4f5a6b7c8d9";
+  const [loading, setLoading] = useState(false);
 
   const isValid =
     item && hostel && (outlet !== "Other" || customOutlet) && Number(fee) > 0;
@@ -41,28 +41,29 @@ export default function CreateScreen() {
     }
 
     try {
-      await createRequest({
-        itemDescription: item,
-        outlet: outlet === "Other" ? customOutlet : outlet,
+      setLoading(true);
+      await requests.create(
+        item,
+        outlet === "Other" ? customOutlet : outlet,
         hostel,
-        fee: Number(fee),
-        userId: HARDCODED_USER_ID,
-      });
+        Number(fee)
+      );
       
       Alert.alert("Success", "Request created! ✅");
       
-      // Reset form after successful creation
+      // Reset form
       setItem("");
       setOutlet("");
       setCustomOutlet("");
       setHostel("");
       setFee("");
       
-      // Navigate back to requests list
+      // Navigate back
       router.push("/(tabs)");
-    } catch (error) {
-      console.log("Error:", error);
-      Alert.alert("Error", "Failed to create request. Please try again.");
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Failed to create request");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,16 +76,16 @@ export default function CreateScreen() {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={{ paddingBottom: 100 }}
           >
             <TopBar title="Create Request" />
 
             <View style={styles.container}>
               <Card>
                 {/* ITEM */}
-                <Text style={[styles.label, { color: theme.text }]}>Item</Text>
+                <Text style={[styles.label, { color: theme.text }]}>Item Description</Text>
                 <TextInput
-                  placeholder="Item"
+                  placeholder="What do you need?"
                   placeholderTextColor={theme.subtext}
                   value={item}
                   onChangeText={setItem}
@@ -99,9 +100,11 @@ export default function CreateScreen() {
                 />
 
                 {/* HOSTEL */}
-                <Text style={[styles.label, { color: theme.text }]}>Hostel</Text>
+                <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                  Hostel
+                </Text>
                 <TextInput
-                  placeholder="Hostel"
+                  placeholder="Your hostel"
                   placeholderTextColor={theme.subtext}
                   value={hostel}
                   onChangeText={setHostel}
@@ -116,7 +119,9 @@ export default function CreateScreen() {
                 />
 
                 {/* OUTLET */}
-                <Text style={[styles.label, { color: theme.text }]}>Select Outlet</Text>
+                <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                  Outlet
+                </Text>
                 <View style={styles.row}>
                   {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
                     <Pressable
@@ -127,7 +132,8 @@ export default function CreateScreen() {
                         {
                           backgroundColor:
                             outlet === o ? theme.primary : theme.card,
-                          borderColor: theme.border,
+                          borderColor: outlet === o ? theme.primary : theme.border,
+                          borderWidth: 1,
                         },
                       ]}
                     >
@@ -135,6 +141,7 @@ export default function CreateScreen() {
                         style={{
                           color: outlet === o ? "#fff" : theme.text,
                           fontWeight: "600",
+                          fontSize: 12,
                         }}
                       >
                         {o}
@@ -143,11 +150,111 @@ export default function CreateScreen() {
                   ))}
                 </View>
 
-                {/* CUSTOM */}
+                {/* CUSTOM OUTLET */}
                 {outlet === "Other" && (
                   <>
-                    <Text style={[styles.label, { color: theme.text }]}>
+                    <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
                       Custom Outlet Name
+                    </Text>
+                    <TextInput
+                      placeholder="Enter outlet name"
+                      placeholderTextColor={theme.subtext}
+                      value={customOutlet}
+                      onChangeText={setCustomOutlet}
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+                  </>
+                )}
+
+                {/* FEE */}
+                <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                  Delivery Fee (₹)
+                </Text>
+                <TextInput
+                  placeholder="How much will you pay?"
+                  placeholderTextColor={theme.subtext}
+                  value={fee}
+                  onChangeText={setFee}
+                  keyboardType="numeric"
+                  style={[
+                    styles.input,
+                    {
+                      color: theme.text,
+                      borderColor: theme.border,
+                      backgroundColor: theme.bg,
+                    },
+                  ]}
+                />
+              </Card>
+
+              {/* SUBMIT BUTTON */}
+              <Pressable
+                onPress={handleSubmit}
+                disabled={!isValid || loading}
+                style={[
+                  styles.submitButton,
+                  {
+                    backgroundColor: isValid && !loading ? theme.primary : theme.border,
+                    opacity: isValid && !loading ? 1 : 0.5,
+                  },
+                ]}
+              >
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+                  {loading ? "Creating..." : "Create Request"}
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 0.45,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitButton: {
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
                     </Text>
                     <TextInput
                       placeholder="Enter outlet name"

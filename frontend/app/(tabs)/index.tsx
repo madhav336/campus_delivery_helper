@@ -11,100 +11,86 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import { useRouter } from "expo-router";
-import {
-  getRequests,
-  deleteRequest,
-} from "@/services/api";
-import { DeliveryRequest } from "@/types/deliveryRequest";
-import RequestCard from "@/components/RequestCard";
+import { requests } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
+import { Ionicons } from "@expo/vector-icons";
+
+interface DeliveryRequest {
+  _id: string;
+  itemDescription: string;
+  outlet: string;
+  hostel: string;
+  fee: number;
+  status: string;
+  requestedBy: string;
+  acceptedBy?: string;
+  createdAt: string;
+}
 
 export default function RequestsScreen() {
-  const router = useRouter();
   const { theme, mode } = useTheme();
 
-  const [requests, setRequests] = useState<DeliveryRequest[]>([]);
+  const [requestsList, setRequestsList] = useState<DeliveryRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [sortBy, setSortBy] = useState<"newest" | "fee">("newest");
-  const [filterOutlet, setFilterOutlet] =
-    useState<"ALL" | "ANC 1" | "ANC 2" | "CP" | "Other">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"newest" | "fee">("newest");
+  const [filterOutlet, setFilterOutlet] = useState("ALL");
 
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      const data = await getRequests();
-      setRequests(data);
-    } catch {
-      setError("Failed to load requests");
+      const data = await requests.getAll("all");
+      setRequestsList(data);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load requests");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  useFocusEffect(loadRequests);
+
+  const handleDelete = (id: string) => {
     Alert.alert("Delete Request", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteRequest(id);
-          loadRequests();
+          try {
+            await requests.delete(id);
+            Alert.alert("Success", "Request deleted! ✅");
+            loadRequests();
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete");
+          }
         },
       },
     ]);
   };
 
-  const handleEdit = (request: DeliveryRequest) => {
-    router.push({
-      pathname: "/edit/[id]",
-      params: {
-        id: request._id,
-        item: request.itemDescription,
-        outlet: request.outlet,
-        hostel: request.hostel,
-        fee: request.fee,
+  const handleAccept = (id: string) => {
+    Alert.alert("Accept Request", "Accept this delivery?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Accept",
+        onPress: async () => {
+          try {
+            await requests.accept(id);
+            Alert.alert("Success", "Request accepted! ✅");
+            loadRequests();
+          } catch (error: any) {
+            Alert.alert("Error", error?.message || "Failed to accept");
+          }
+        },
       },
-    } as any);
+    ]);
   };
 
-  const handleAccept = async (id: string) => {
-    try {
-      const { acceptRequest } = await import("@/services/api");
-      await acceptRequest(id, "65f1a3b8c2d3e4f5a6b7c8d9");
-      await loadRequests();
-      Alert.alert("Success", "Request accepted! ✅");
-    } catch (error) {
-      Alert.alert("Error", "Failed to accept request");
-    }
-  };
-
-  const handleComplete = async (id: string) => {
-    try {
-      const { completeRequest } = await import("@/services/api");
-      await completeRequest(id, "65f1a3b8c2d3e4f5a6b7c8d9");
-      await loadRequests();
-      Alert.alert("Success", "Request completed! ✅");
-    } catch (error) {
-      Alert.alert("Error", "Failed to complete request");
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadRequests();
-    }, [])
-  );
-
-  /* FILTER + SEARCH */
-  const processedRequests = requests
+  // Filter & sort
+  const filtered = requestsList
     .filter((r) => {
       const q = searchQuery.toLowerCase();
       return (
@@ -115,252 +101,305 @@ export default function RequestsScreen() {
     .filter((r) => {
       if (filterOutlet === "ALL") return true;
       if (filterOutlet === "Other") {
-        return r.outlet !== "ANC 1" && r.outlet !== "ANC 2" && r.outlet !== "CP";
+        return !["ANC 1", "ANC 2", "CP"].includes(r.outlet);
       }
       return r.outlet === filterOutlet;
     });
 
-  /* SORT */
-  const sortedRequests = [...processedRequests].sort((a, b) => {
-    const statusOrder = { "OPEN": 0, "IN_PROGRESS": 1, "COMPLETED": 2 };
+  const sorted = [...filtered].sort((a, b) => {
+    const statusOrder = { OPEN: 0, IN_PROGRESS: 1, COMPLETED: 2 };
     const aOrder = statusOrder[a.status as keyof typeof statusOrder] || 0;
     const bOrder = statusOrder[b.status as keyof typeof statusOrder] || 0;
 
     if (aOrder !== bOrder) return aOrder - bOrder;
-
     if (sortBy === "fee") return b.fee - a.fee;
-
-    return (
-      new Date(b.createdAt).getTime() -
-      new Date(a.createdAt).getTime()
-    );
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-
-  /* GROUP */
-  const groupedRequests = {
-    "ANC 1": sortedRequests.filter((r) => r.outlet === "ANC 1"),
-    "ANC 2": sortedRequests.filter((r) => r.outlet === "ANC 2"),
-    CP: sortedRequests.filter((r) => r.outlet === "CP"),
-    Other: sortedRequests.filter(
-      (r) =>
-        r.outlet !== "ANC 1" &&
-        r.outlet !== "ANC 2" &&
-        r.outlet !== "CP"
-    ),
-  };
 
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <TopBar title="Delivery Requests" />
+        <TopBar title="Requests" />
         <View style={styles.centered}>
           <ActivityIndicator size="large" />
-          <Text style={{ marginTop: 8, color: theme.text }}>Loading requests...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <TopBar title="Delivery Requests" />
-        <View style={styles.centered}>
-          <Text style={{ color: theme.text }}>{error}</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <SafeAreaView style={{ flex: 1 }}>
-        <TopBar title="Delivery Requests" />
-        
-        <ScrollView contentContainerStyle={[styles.scrollContainer, { paddingBottom: 120 }]}>
-          {/* SEARCH */}
-          <Card>
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search item or outlet..."
-              placeholderTextColor={theme.subtext}
-              style={[
-                styles.searchInput,
-                {
-                  backgroundColor: theme.bg,
-                  borderColor: theme.border,
-                  color: theme.text,
-                },
-              ]}
-            />
-          </Card>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+      <TopBar title="Requests" />
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 120 }]}>
+        {/* SEARCH */}
+        <Card>
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search item or outlet..."
+            placeholderTextColor={theme.subtext}
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.bg,
+                borderColor: theme.border,
+                color: theme.text,
+              },
+            ]}
+          />
+        </Card>
 
-          {/* SORT */}
-          <Card>
-            <View style={styles.controlsRow}>
-              <Text style={{ color: theme.text, fontWeight: "600", marginBottom: 10 }}>
-                Sort by:
-              </Text>
-              <View style={styles.sortControls}>
-                {["newest", "fee"].map((type) => (
-                  <Pressable
-                    key={type}
-                    onPress={() => setSortBy(type as any)}
-                    style={[
-                      styles.sortButton,
-                      {
-                        backgroundColor:
-                          sortBy === type ? theme.primary : theme.card,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        color: sortBy === type ? "#fff" : theme.text,
-                        fontWeight: "600",
-                        fontSize: 12,
-                      }}
-                    >
-                      {type === "newest" ? "Newest" : "Fee"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </Card>
+        {/* CONTROLS */}
+        <Card>
+          <Text style={[styles.label, { color: theme.text }]}>Sort</Text>
+          <View style={styles.row}>
+            {["newest", "fee"].map((type) => (
+              <Pressable
+                key={type}
+                onPress={() => setSortBy(type as any)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor:
+                      sortBy === type ? theme.primary : theme.card,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: sortBy === type ? "#fff" : theme.text,
+                    fontWeight: "600",
+                    fontSize: 11,
+                  }}
+                >
+                  {type === "newest" ? "Newest" : "Fee"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
-          {/* FILTER */}
-          <Card>
-            <View style={styles.controlsRow}>
-              <Text style={{ color: theme.text, fontWeight: "600", marginBottom: 10 }}>
-                Filter by outlet:
-              </Text>
-              <View style={styles.filterControls}>
-                {["ALL", "ANC 1", "ANC 2", "CP", "Other"].map((outlet) => (
-                  <Pressable
-                    key={outlet}
-                    onPress={() =>
-                      setFilterOutlet(outlet as typeof filterOutlet)
-                    }
-                    style={[
-                      styles.filterButton,
-                      {
-                        backgroundColor:
-                          filterOutlet === outlet
-                            ? theme.primary
-                            : theme.card,
-                        borderColor: theme.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        color:
-                          filterOutlet === outlet
-                            ? "#fff"
-                            : theme.text,
-                        fontWeight: "600",
-                        fontSize: 12,
-                      }}
-                    >
-                      {outlet}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          </Card>
-
-          {/* LIST */}
-          {Object.entries(groupedRequests).map(([outlet, list]) => {
-            if (list.length === 0) return null;
-
-            return (
-              <View key={outlet}>
-                <Text style={[styles.sectionTitle, { color: theme.text }]}>
+          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+            Outlet
+          </Text>
+          <View style={styles.row}>
+            {["ALL", "ANC 1", "ANC 2", "CP", "Other"].map((outlet) => (
+              <Pressable
+                key={outlet}
+                onPress={() => setFilterOutlet(outlet)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor:
+                      filterOutlet === outlet
+                        ? theme.primary
+                        : theme.card,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: filterOutlet === outlet ? "#fff" : theme.text,
+                    fontWeight: "600",
+                    fontSize: 11,
+                  }}
+                >
                   {outlet}
                 </Text>
-                {list.map((item) => (
-                  <RequestCard
-                    key={item._id}
-                    request={item}
-                    onDelete={
-                      mode === "STUDENT"
-                        ? () => handleDelete(item._id)
-                        : undefined
-                    }
-                    onEdit={
-                      mode === "STUDENT"
-                        ? () => handleEdit(item)
-                        : undefined
-                    }
-                    onAccept={() => handleAccept(item._id)}
-                    onComplete={() => handleComplete(item._id)}
-                  />
-                ))}
-              </View>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
+
+        {/* LIST */}
+        {sorted.length === 0 ? (
+          <Card>
+            <Text style={[styles.emptyText, { color: theme.subtext }]}>
+              No requests found
+            </Text>
+          </Card>
+        ) : (
+          sorted.map((req) => {
+            const canAccept = req.status === "OPEN" && mode === "STUDENT" && req.requestedBy !== (global as any).currentUserId;
+            const canDelete = req.status === "OPEN" && req.requestedBy === (global as any).currentUserId;
+            const isAccepted = req.status === "IN_PROGRESS";
+            const isCompleted = req.status === "COMPLETED";
+
+            return (
+              <Card key={req._id}>
+                <View style={styles.header}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.item, { color: theme.text }]}>
+                      {req.itemDescription}
+                    </Text>
+                    <Text style={[styles.details, { color: theme.subtext }]}>
+                      {req.outlet} → {req.hostel}
+                    </Text>
+                  </View>
+                  <View style={[styles.feeBadge, { backgroundColor: theme.primary + "20" }]}>
+                    <Text style={[styles.fee, { color: theme.primary }]}>
+                      ₹{req.fee}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.status}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      {
+                        backgroundColor:
+                          req.status === "OPEN"
+                            ? "#ef4444"
+                            : req.status === "IN_PROGRESS"
+                            ? "#f59e0b"
+                            : "#10b981",
+                      },
+                    ]}
+                  >
+                    <Text style={styles.statusText}>{req.status}</Text>
+                  </View>
+                  {isAccepted && (
+                    <Text style={[styles.accepted, { color: theme.subtext }]}>
+                      by {req.acceptedBy?.split("@")[0]}
+                    </Text>
+                  )}
+                </View>
+
+                {(canAccept || canDelete || isAccepted || isCompleted) && (
+                  <View style={styles.actions}>
+                    {canAccept && (
+                      <Pressable
+                        onPress={() => handleAccept(req._id)}
+                        style={[
+                          styles.button,
+                          { backgroundColor: theme.primary },
+                        ]}
+                      >
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 4, fontSize: 12 }}>
+                          Accept
+                        </Text>
+                      </Pressable>
+                    )}
+                    {canDelete && (
+                      <Pressable
+                        onPress={() => handleDelete(req._id)}
+                        style={[
+                          styles.button,
+                          { backgroundColor: "#ef4444" },
+                        ]}
+                      >
+                        <Ionicons name="trash" size={16} color="#fff" />
+                        <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 4, fontSize: 12 }}>
+                          Delete
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+              </Card>
             );
-          })}
-        </ScrollView>
-      </SafeAreaView>
-    </View>
+          })
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
+  container: {
     padding: 16,
-    paddingBottom: 40,
   },
-
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-
-  searchInput: {
+  input: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 14,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
   },
-
-  controlsRow: {
-    gap: 10,
-  },
-
-  sortControls: {
-    flexDirection: "row",
-    gap: 8,
-  },
-
-  sortButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderRadius: 10,
-  },
-
-  filterControls: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-
-  filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderRadius: 10,
-  },
-
-  sectionTitle: {
-    fontSize: 16,
+  label: {
+    fontSize: 13,
     fontWeight: "600",
-    marginBottom: 10,
-    marginTop: 16,
+    marginBottom: 8,
   },
+  row: {
+    flexDirection: "row",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 10,
+  },
+  item: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  details: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  feeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  fee: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  status: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  accepted: {
+    fontSize: 10,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  button: {
+    flex: 1,
+    flexDirection: "row",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyText: {
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+});
 });

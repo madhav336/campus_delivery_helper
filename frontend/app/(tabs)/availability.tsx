@@ -2,135 +2,93 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   Pressable,
   TextInput,
-  Keyboard,
-  TouchableWithoutFeedback,
-  SectionList,
-  FlatList,
+  ActivityIndicator,
   Alert,
-  ScrollView,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
-import {
-  getAvailability,
-  createAvailability,
-  respondAvailability,
-  getOutlets,
-  deleteAvailability,
-  updateAvailability,
-} from "@/services/api";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import Card from "@/components/ui/Card";
+import { availability, outlets } from "@/services/api";
+import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
+import Card from "@/components/ui/Card";
+import { Ionicons } from "@expo/vector-icons";
 
-type AvailabilityRequest = {
+
+interface AvailabilityRequest {
   _id: string;
-  requestedBy: string;
-  item: string;
+  itemName: string;
   outlet: string;
-  status: "PENDING" | "AVAILABLE" | "NOT_AVAILABLE";
-};
+  requestedBy: string;
+  status: string;
+  createdAt: string;
+}
 
-type Outlet = {
+interface Outlet {
   _id: string;
   name: string;
   locationDescription: string;
-};
+}
 
 export default function AvailabilityScreen() {
   const { theme, mode } = useTheme();
 
   const [item, setItem] = useState("");
+  const [selectedOutlet, setSelectedOutlet] = useState<Outlet | null>(null);
   const [outletSearch, setOutletSearch] = useState("");
-  const [selectedOutlet, setSelectedOutlet] = useState<string | null>(null);
-  const [outlets, setOutlets] = useState<Outlet[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [requests, setRequests] = useState<AvailabilityRequest[]>([]);
+  const [availabilityList, setAvailabilityList] = useState<AvailabilityRequest[]>([]);
+  const [outletsList, setOutletsList] = useState<Outlet[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Edit Modal State
+  const [showOutletDropdown, setShowOutletDropdown] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState("");
-  const [editOutletSearch, setEditOutletSearch] = useState("");
-  const [editSelectedOutlet, setEditSelectedOutlet] = useState<string | null>(null);
-  const [editShowDropdown, setEditShowDropdown] = useState(false);
+  const [editSelectedOutlet, setEditSelectedOutlet] = useState<Outlet | null>(null);
 
-  const HARDCODED_USER_ID = "65f1a3b8c2d3e4f5a6b7c8d9";
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [availData, outletData] = await Promise.all([
-        getAvailability(),
-        getOutlets(),
+        availability.getOwn(),
+        outlets.getAll(),
       ]);
-      setRequests(availData);
-      setOutlets(outletData);
-    } catch {
-      console.error("Failed to load data");
+      setAvailabilityList(availData);
+      setOutletsList(outletData);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load data");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useFocusEffect(useCallback(() => { loadData(); }, []));
+  useFocusEffect(loadData);
 
-  const filteredOutlets = outlets.filter((o) =>
+  const filteredOutlets = outletsList.filter((o) =>
     o.name.toLowerCase().includes(outletSearch.toLowerCase())
-  );
-
-  const filteredEditOutlets = outlets.filter((o) =>
-    o.name.toLowerCase().includes(editOutletSearch.toLowerCase())
   );
 
   const handleCreate = async () => {
     if (!item.trim() || !selectedOutlet) {
-      Alert.alert("Validation Error", "Please enter item and select an outlet");
+      Alert.alert("Validation", "Please enter item and select outlet");
       return;
     }
 
     try {
-      await createAvailability({
-        userId: HARDCODED_USER_ID,
-        outlet: selectedOutlet,
-        item,
-      });
-      setItem("");
-      setOutletSearch("");
-      setSelectedOutlet(null);
-      setShowDropdown(false);
+      await availability.create(item, selectedOutlet._id);
       Alert.alert("Success", "Availability request created! ✅");
-      await loadData();
-    } catch (error) {
-      Alert.alert("Error", "Failed to create request");
-      console.error("Failed to create request", error);
+      setItem("");
+      setSelectedOutlet(null);
+      setOutletSearch("");
+      setShowOutletDropdown(false);
+      loadData();
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Failed to create");
     }
   };
 
-  const handleUpdateAvailability = async (id: string) => {
-    if (!editItem.trim() || !editSelectedOutlet) {
-      Alert.alert("Validation Error", "Please enter item and outlet");
-      return;
-    }
-
-    try {
-      await updateAvailability(id, { item: editItem, outlet: editSelectedOutlet });
-      setEditingId(null);
-      Alert.alert("Success", "Updated! ✅");
-      await loadData();
-    } catch (error) {
-      Alert.alert("Error", "Failed to update");
-      console.error("Failed to update", error);
-    }
-  };
-
-  const handleDeleteAvailability = async (id: string) => {
+  const handleDelete = (id: string) => {
     Alert.alert("Delete", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -138,9 +96,9 @@ export default function AvailabilityScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteAvailability(id);
+            await availability.delete(id);
             Alert.alert("Success", "Deleted! ✅");
-            await loadData();
+            loadData();
           } catch (error) {
             Alert.alert("Error", "Failed to delete");
           }
@@ -149,621 +107,366 @@ export default function AvailabilityScreen() {
     ]);
   };
 
-  const handleEditStart = (avail: AvailabilityRequest) => {
-    setEditingId(avail._id);
-    setEditItem(avail.item);
-    setEditSelectedOutlet(avail.outlet);
-    setEditOutletSearch(avail.outlet);
-  };
+  const handleUpdate = async (id: string) => {
+    if (!editItem.trim() || !editSelectedOutlet) {
+      Alert.alert("Validation", "Please enter item and outlet");
+      return;
+    }
 
-  const handleEditCancel = () => {
-    setEditingId(null);
-    setEditItem("");
-    setEditOutletSearch("");
-    setEditSelectedOutlet(null);
-    setEditShowDropdown(false);
-  };
-
-  const handleRespond = async (
-    id: string,
-    status: "AVAILABLE" | "NOT_AVAILABLE"
-  ) => {
     try {
-      await respondAvailability(id, status);
-      await loadData();
+      await availability.update(id, editItem, editSelectedOutlet._id);
+      Alert.alert("Success", "Updated! ✅");
+      setEditingId(null);
+      loadData();
     } catch (error) {
-      console.error("Failed to respond:", error);
+      Alert.alert("Error", "Failed to update");
     }
   };
 
-  // ===== STUDENT MODE =====
-  if (mode === "STUDENT") {
+  if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <View style={{ flex: 1 }}>
-          {/* FIXED HEADER */}
-          <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
-            <Card>
-              <Text style={[styles.title, { color: theme.text }]}>
-                Request Availability
-              </Text>
-
-              {/* OUTLET SEARCH */}
-              <Text style={[styles.label, { color: theme.text }]}>
-                Select Outlet
-              </Text>
-              <TextInput
-                placeholder="Search outlets..."
-                placeholderTextColor={theme.subtext}
-                value={outletSearch}
-                onChangeText={(text) => {
-                  setOutletSearch(text);
-                  setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                style={[
-                  styles.searchInput,
-                  {
-                    borderColor: theme.border,
-                    color: theme.text,
-                    backgroundColor: theme.bg,
-                  },
-                ]}
-              />
-
-              {selectedOutlet && (
-                <View
-                  style={[
-                    styles.selectedPill,
-                    {
-                      backgroundColor: theme.primary + "20",
-                      borderColor: theme.primary,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: theme.primary, fontWeight: "600" }}>
-                    ✓ {selectedOutlet}
-                  </Text>
-                  <Pressable
-                    onPress={() => {
-                      setSelectedOutlet(null);
-                      setOutletSearch("");
-                    }}
-                  >
-                    <Text style={{ color: theme.primary, fontSize: 18 }}>×</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {/* DROPDOWN */}
-              {showDropdown && filteredOutlets.length > 0 && (
-                <ScrollView
-                  style={[
-                    styles.dropdown,
-                    { backgroundColor: theme.bg, borderColor: theme.border },
-                  ]}
-                  scrollEnabled={filteredOutlets.length > 4}
-                  nestedScrollEnabled
-                >
-                  {filteredOutlets.map((outlet) => (
-                    <Pressable
-                      key={outlet._id}
-                      onPress={() => {
-                        setSelectedOutlet(outlet.name);
-                        setOutletSearch(outlet.name);
-                        setShowDropdown(false);
-                      }}
-                      style={[
-                        styles.dropdownItem,
-                        { borderBottomColor: theme.border },
-                      ]}
-                    >
-                      <Text style={{ color: theme.text, fontWeight: "500" }}>
-                        {outlet.name}
-                      </Text>
-                      <Text style={{ color: theme.subtext, fontSize: 12 }}>
-                        {outlet.locationDescription}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
-
-              {/* ITEM INPUT */}
-              <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                Item Name
-              </Text>
-              <TextInput
-                placeholder="Enter item"
-                placeholderTextColor={theme.subtext}
-                value={item}
-                onChangeText={setItem}
-                style={[
-                  styles.input,
-                  {
-                    borderColor: theme.border,
-                    color: theme.text,
-                    backgroundColor: theme.bg,
-                  },
-                ]}
-              />
-
-              <Pressable
-                onPress={handleCreate}
-                style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-              >
-                <Text style={styles.primaryText}>Request Availability</Text>
-              </Pressable>
-            </Card>
-          </View>
-
-          {/* SCROLLABLE LIST */}
-          <FlatList
-            data={requests}
-            keyExtractor={(item: AvailabilityRequest) => item._id}
-            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-            renderItem={({ item }: { item: AvailabilityRequest }) => (
-              <Card>
-                <View style={styles.requestHeader}>
-                  <View>
-                    <Text
-                      style={{
-                        color: theme.text,
-                        fontWeight: "600",
-                        fontSize: 16,
-                      }}
-                    >
-                      {item.item}
-                    </Text>
-                    <Text style={{ color: theme.subtext, marginTop: 4 }}>
-                      {item.outlet}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.badge,
-                      {
-                        color:
-                          item.status === "AVAILABLE"
-                            ? "#10b981"
-                            : item.status === "NOT_AVAILABLE"
-                              ? "#ef4444"
-                              : "#f59e0b",
-                      },
-                    ]}
-                  >
-                    {item.status}
-                  </Text>
-                </View>
-
-                <View style={styles.actionRow}>
-                  {item.status === "PENDING" && (
-                    <Pressable
-                      onPress={() => handleEditStart(item)}
-                      style={[styles.smallBtn, { backgroundColor: theme.primary }]}
-                    >
-                      <Text style={styles.btnText}>Edit</Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    onPress={() => handleDeleteAvailability(item._id)}
-                    style={[styles.smallBtn, { backgroundColor: "#ef4444" }]}
-                  >
-                    <Text style={styles.btnText}>Delete</Text>
-                  </Pressable>
-                </View>
-              </Card>
-            )}
-          />
+        <TopBar title="Availability" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
         </View>
-
-        {/* EDIT MODAL */}
-        <Modal
-          visible={editingId !== null}
-          transparent
-          animationType="slide"
-          onRequestClose={handleEditCancel}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ flex: 1 }}
-          >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-                <View style={{ flex: 1, padding: 16 }}>
-                  <Text style={[styles.modalTitle, { color: theme.text }]}>
-                    Edit Availability
-                  </Text>
-
-                  <ScrollView style={{ flex: 1, marginBottom: 16 }}>
-                    <Card>
-                      {/* ITEM */}
-                      <Text style={[styles.label, { color: theme.text }]}>
-                        Item
-                      </Text>
-                      <TextInput
-                        value={editItem}
-                        onChangeText={setEditItem}
-                        placeholderTextColor={theme.subtext}
-                        style={[
-                          styles.input,
-                          {
-                            borderColor: theme.border,
-                            color: theme.text,
-                            backgroundColor: theme.bg,
-                          },
-                        ]}
-                      />
-
-                      {/* OUTLET SEARCH */}
-                      <Text style={[styles.label, { color: theme.text }]}>
-                        Select Outlet
-                      </Text>
-                      <TextInput
-                        placeholder="Search outlets..."
-                        placeholderTextColor={theme.subtext}
-                        value={editOutletSearch}
-                        onChangeText={(text) => {
-                          setEditOutletSearch(text);
-                          setEditShowDropdown(true);
-                        }}
-                        onFocus={() => setEditShowDropdown(true)}
-                        style={[
-                          styles.searchInput,
-                          {
-                            borderColor: theme.border,
-                            color: theme.text,
-                            backgroundColor: theme.bg,
-                          },
-                        ]}
-                      />
-
-                      {editSelectedOutlet && (
-                        <View
-                          style={[
-                            styles.selectedPill,
-                            {
-                              backgroundColor: theme.primary + "20",
-                              borderColor: theme.primary,
-                            },
-                          ]}
-                        >
-                          <Text style={{ color: theme.primary, fontWeight: "600" }}>
-                            ✓ {editSelectedOutlet}
-                          </Text>
-                          <Pressable
-                            onPress={() => {
-                              setEditSelectedOutlet(null);
-                              setEditOutletSearch("");
-                            }}
-                          >
-                            <Text style={{ color: theme.primary, fontSize: 18 }}>
-                              ×
-                            </Text>
-                          </Pressable>
-                        </View>
-                      )}
-
-                      {/* DROPDOWN */}
-                      {editShowDropdown && filteredEditOutlets.length > 0 && (
-                        <ScrollView
-                          style={[
-                            styles.dropdown,
-                            {
-                              backgroundColor: theme.bg,
-                              borderColor: theme.border,
-                            },
-                          ]}
-                          scrollEnabled={filteredEditOutlets.length > 4}
-                          nestedScrollEnabled
-                        >
-                          {filteredEditOutlets.map((outlet) => (
-                            <Pressable
-                              key={outlet._id}
-                              onPress={() => {
-                                setEditSelectedOutlet(outlet.name);
-                                setEditOutletSearch(outlet.name);
-                                setEditShowDropdown(false);
-                              }}
-                              style={[
-                                styles.dropdownItem,
-                                { borderBottomColor: theme.border },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  color: theme.text,
-                                  fontWeight: "500",
-                                }}
-                              >
-                                {outlet.name}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: theme.subtext,
-                                  fontSize: 12,
-                                }}
-                              >
-                                {outlet.locationDescription}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </ScrollView>
-                      )}
-                    </Card>
-                  </ScrollView>
-
-                  {/* BUTTONS */}
-                  <View style={styles.modalButtonRow}>
-                    <Pressable
-                      onPress={() => handleUpdateAvailability(editingId!)}
-                      style={[
-                        styles.modalBtn,
-                        { backgroundColor: theme.primary },
-                      ]}
-                    >
-                      <Text style={styles.btnText}>Save</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleEditCancel}
-                      style={[
-                        styles.modalBtn,
-                        { backgroundColor: theme.subtext },
-                      ]}
-                    >
-                      <Text style={styles.btnText}>Cancel</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </SafeAreaView>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        </Modal>
       </SafeAreaView>
     );
   }
 
-  // ===== OUTLET MODE =====
-  const sections = [
-    {
-      title: "PENDING REQUESTS",
-      data: requests.filter((r) => r.status === "PENDING"),
-    },
-  ];
+  if (mode === "OUTLET") {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <TopBar title="My Details" />
+        <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+          <Card>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>
+              When are you available?  
+            </Text>
+            <Text style={[styles.description, { color: theme.subtext }]}>
+              Students will check availability and you respond from Pending tab
+            </Text>
+            <View style={[styles.infoBox, { backgroundColor: theme.primary + "15" }]}>
+              <Ionicons name="information-circle" size={20} color={theme.primary} />
+              <Text style={[styles.infoText, { color: theme.text }]}>
+                Pending check requests will appear in the "Pending" tab
+              </Text>
+            </View>
+          </Card>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
+  // STUDENT MODE
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      <View style={{ flex: 1 }}>
-        <TopBar title="Availability Requests" />
+      <TopBar title="Check Availability" />
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+        {/* CREATE SECTION */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Request Availability
+          </Text>
 
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          ListEmptyComponent={
-            <Text style={{ textAlign: "center", color: theme.subtext, marginTop: 20 }}>
-              No requests yet
-            </Text>
-          }
-          renderItem={({ item, section }) => (
-            <Card>
-              <View style={styles.requestHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontWeight: "600", fontSize: 16 }}>
-                    {item.item}
-                  </Text>
-                  <Text style={{ color: theme.subtext, marginTop: 4, fontSize: 14 }}>
-                    {item.outlet}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.badge,
-                    {
-                      color:
-                        item.status === "AVAILABLE"
-                          ? "#10b981"
-                          : item.status === "NOT_AVAILABLE"
-                            ? "#ef4444"
-                            : "#f59e0b",
-                    },
-                  ]}
-                >
-                  {item.status}
-                </Text>
-              </View>
+          {/* ITEM INPUT */}
+          <Text style={[styles.label, { color: theme.text }]}>Item Name</Text>
+          <TextInput
+            value={item}
+            onChangeText={setItem}
+            placeholder="What are you checking availability for?"
+            placeholderTextColor={theme.subtext}
+            style={[
+              styles.input,
+              {
+                color: theme.text,
+                borderColor: theme.border,
+                backgroundColor: theme.bg,
+              },
+            ]}
+          />
 
-              {section.title === "PENDING REQUESTS" && (
-                <View style={styles.actionRow}>
-                  <Pressable
-                    onPress={() => handleRespond(item._id, "AVAILABLE")}
-                    style={[
-                      styles.acceptBtn,
-                      { backgroundColor: theme.primary },
-                    ]}
-                  >
-                    <Text style={styles.btnText}>AVAILABLE</Text>
-                  </Pressable>
+          {/* OUTLET SELECTOR */}
+          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+            Outlet
+          </Text>
+          <TextInput
+            value={outletSearch}
+            onChangeText={(text) => {
+              setOutletSearch(text);
+              setShowOutletDropdown(true);
+            }}
+            onFocus={() => setShowOutletDropdown(true)}
+            placeholder="Search outlets..."
+            placeholderTextColor={theme.subtext}
+            style={[
+              styles.input,
+              {
+                color: theme.text,
+                borderColor: theme.border,
+                backgroundColor: theme.bg,
+              },
+            ]}
+          />
 
-                  <Pressable
-                    onPress={() => handleRespond(item._id, "NOT_AVAILABLE")}
-                    style={[styles.rejectBtn, { backgroundColor: "#ef4444" }]}
-                  >
-                    <Text style={styles.btnText}>NOT AVAILABLE</Text>
-                  </Pressable>
-                </View>
-              )}
-            </Card>
+          {selectedOutlet && (
+            <View style={[styles.selectedPill, { backgroundColor: theme.primary + "20" }]}>
+              <Text style={{ color: theme.primary, fontWeight: "600" }}>
+                ✓ {selectedOutlet.name}
+              </Text>
+              <Pressable onPress={() => setSelectedOutlet(null)}>
+                <Text style={{ color: theme.primary, fontSize: 16 }}>×</Text>
+              </Pressable>
+            </View>
           )}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text
+
+          {showOutletDropdown && filteredOutlets.length > 0 && (
+            <ScrollView
               style={[
-                styles.sectionHeader,
-                {
-                  color: theme.text,
-                  backgroundColor: theme.bg,
-                },
+                styles.dropdown,
+                { backgroundColor: theme.bg, borderColor: theme.border },
               ]}
+              scrollEnabled={filteredOutlets.length > 4}
+              nestedScrollEnabled
             >
-              {title}
-            </Text>
+              {filteredOutlets.map((o) => (
+                <Pressable
+                  key={o._id}
+                  onPress={() => {
+                    setSelectedOutlet(o);
+                    setOutletSearch(o.name);
+                    setShowOutletDropdown(false);
+                  }}
+                  style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
+                >
+                  <Text style={{ color: theme.text, fontWeight: "500" }}>
+                    {o.name}
+                  </Text>
+                  <Text style={[styles.outletDesc, { color: theme.subtext }]}>
+                    {o.locationDescription}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           )}
-        />
-      </View>
+
+          {/* CREATE BUTTON */}
+          <Pressable
+            onPress={handleCreate}
+            disabled={!item || !selectedOutlet}
+            style={[
+              styles.button,
+              {
+                backgroundColor:
+                  item && selectedOutlet ? theme.primary : theme.border,
+              },
+            ]}
+          >
+            <Ionicons name="send" size={18} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 8 }}>
+              Check Availability
+            </Text>
+          </Pressable>
+        </Card>
+
+        {/* MY REQUESTS SECTION */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Your Requests
+          </Text>
+          {availabilityList.length === 0 ? (
+            <Text style={[styles.emptyText, { color: theme.subtext }]}>
+              No requests yet. Create one above!
+            </Text>
+          ) : (
+            availabilityList.map((req) => (
+              <View key={req._id} style={[styles.requestItem, { borderBottomColor: theme.border }]}>
+                {editingId === req._id ? (
+                  // EDIT MODE
+                  <>
+                    <TextInput
+                      value={editItem}
+                      onChangeText={setEditItem}
+                      placeholder="Item"
+                      placeholderTextColor={theme.subtext}
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+                    <View style={styles.editButtons}>
+                      <Pressable
+                        onPress={() => setEditingId(null)}
+                        style={[styles.editBtn, { backgroundColor: theme.bg }]}
+                      >
+                        <Text style={{ color: theme.text }}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleUpdate(req._id)}
+                        style={[styles.editBtn, { backgroundColor: theme.primary }]}
+                      >
+                        <Text style={{ color: "#fff" }}>Save</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  // VIEW MODE
+                  <>
+                    <View>
+                      <Text style={[styles.itemName, { color: theme.text }]}>
+                        {req.itemName}
+                      </Text>
+                      <Text style={[styles.outletName, { color: theme.subtext }]}>
+                        📍 {req.outlet}
+                      </Text>
+                      <Text style={[styles.status, { color: theme.subtext, fontSize: 11 }]}>
+                        {req.status}
+                      </Text>
+                    </View>
+                    <View style={styles.actions}>
+                      <Pressable
+                        onPress={() => {
+                          setEditingId(req._id);
+                          setEditItem(req.itemName);
+                        }}
+                        style={{ padding: 8 }}
+                      >
+                        <Ionicons name="pencil" size={16} color={theme.primary} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDelete(req._id)}
+                        style={{ padding: 8 }}
+                      >
+                        <Ionicons name="trash" size={16} color="#ef4444" />
+                      </Pressable>
+                    </View>
+                  </>
+                )}
+              </View>
+            ))
+          )}
+        </Card>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+  container: {
+    padding: 16,
   },
-
-  title: {
-    fontSize: 20,
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionTitle: {
+    fontSize: 15,
     fontWeight: "700",
-    marginBottom: 16,
+    marginBottom: 8,
   },
-
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 20,
+  description: {
+    fontSize: 12,
+    marginBottom: 12,
   },
-
   label: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 6,
   },
-
-  searchInput: {
+  input: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    marginBottom: 8,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
   },
-
   selectedPill: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
+    gap: 8,
     paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-
-  dropdown: {
-    borderWidth: 1,
-    borderRadius: 12,
-    maxHeight: 200,
-    marginBottom: 12,
-  },
-
-  dropdownItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-  },
-
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-
-  primaryBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 20,
     marginTop: 8,
-  },
-
-  primaryText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-
-  requestHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  badge: {
-    fontSize: 12,
-    fontWeight: "700",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "flex-end",
-  },
-
-  smallBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-
-  btnText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-
-  acceptBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-
-  rejectBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-
-  changeStatusBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 4,
-  },
-
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: "700",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 12,
     marginBottom: 8,
   },
-
-  modalButtonRow: {
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "flex-end",
+  dropdown: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 4,
+    paddingVertical: 4,
   },
-
-  modalBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    minWidth: 100,
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  outletDesc: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  button: {
+    flexDirection: "row",
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+  requestItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  outletName: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  status: {
+    marginTop: 4,
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  editButtons: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+  },
+  editBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  emptyText: {
+    textAlign: "center",
+    paddingVertical: 20,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  infoText: {
+    fontSize: 12,
+    flex: 1,
   },
 });

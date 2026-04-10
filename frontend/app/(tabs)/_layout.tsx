@@ -20,20 +20,20 @@ export default function TabLayout() {
     const currentRoute = segments[segments.length - 1];
 
     if (mode === "STUDENT") {
-      if (!["index", "create", "availability"].includes(currentRoute)) {
+      if (!["index", "create", "availability", "activity", "leaderboard", "profile"].includes(currentRoute)) {
         setTimeout(() => router.replace("/(tabs)"), 0);
       }
     }
 
     if (mode === "OUTLET") {
-      if (currentRoute !== "availability") {
+      if (!["availability", "pending", "profile"].includes(currentRoute)) {
         setTimeout(() => router.replace("/(tabs)/availability"), 0);
       }
     }
 
     if (mode === "ADMIN") {
-      if (!["users", "outlets"].includes(currentRoute)) {
-        setTimeout(() => router.replace("/(tabs)/users"), 0);
+      if (!["users", "outlets", "analytics", "profile"].includes(currentRoute)) {
+        setTimeout(() => router.replace("/(tabs)/analytics"), 0);
       }
     }
   }, [mode, mounted]);
@@ -60,6 +60,7 @@ export default function TabLayout() {
         },
       }}
     >
+      {/* STUDENT TABS */}
       <Tabs.Screen
         name="index"
         options={{
@@ -83,15 +84,62 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="activity"
+        options={{
+          title: "Activity",
+          href: mode === "STUDENT" ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="flash-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="leaderboard"
+        options={{
+          title: "Board",
+          href: mode === "STUDENT" ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="podium-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* SHARED TABS */}
+      <Tabs.Screen
         name="availability"
         options={{
-          title: "Availability",
+          title: mode === "OUTLET" ? "Check" : "Avail",
           href:
             mode === "STUDENT" || mode === "OUTLET"
               ? undefined
               : null,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flash-outline" size={size} color={color} />
+            <Ionicons name="checkmark-circle-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* OUTLET SPECIFIC */}
+      <Tabs.Screen
+        name="pending"
+        options={{
+          title: "Pending",
+          href: mode === "OUTLET" ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="inbox-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* ADMIN TABS */}
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: "Analytics",
+          href: mode === "ADMIN" ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bar-chart-outline" size={size} color={color} />
           ),
         }}
       />
@@ -114,6 +162,17 @@ export default function TabLayout() {
           href: mode === "ADMIN" ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="storefront-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* PROFILE - ALL ROLES */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Me",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
       />
