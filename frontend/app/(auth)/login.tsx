@@ -52,7 +52,7 @@ export default function LoginScreen({ navigation }: any) {
           style={[styles.input, { color: theme.text, backgroundColor: theme.card, borderColor: theme.border }]}
         />
 
-        <GradientButton title="Login" onPress={handleLogin} disabled={loading} />
+        <GradientButton title={loading ? "Logging in..." : "Login"} onPress={handleLogin} />
 
         <Pressable onPress={() => navigation.navigate('Signup')}>
           <Text style={[styles.link, { color: theme.primary }]}>Don't have an account? Sign Up</Text>

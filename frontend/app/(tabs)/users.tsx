@@ -2,32 +2,26 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   Pressable,
   FlatList,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
-import { getUsers, createUser, deleteUser, updateUser } from "@/services/api";
+import { users } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import Card from "@/components/ui/Card";
-import GradientButton from "@/components/ui/GradientButton";
 import TopBar from "@/components/ui/TopBar";
 
 export default function UsersScreen() {
   const { theme } = useTheme();
 
-  const [users, setUsers] = useState<any[]>([]);
-  const [name, setName] = useState("");
-  const [hostel, setHostel] = useState("");
-  const [role, setRole] = useState<"STUDENT" | "OUTLET_OWNER">("STUDENT");
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [usersList, setUsersList] = useState<any[]>([]);
 
   const fetchUsers = async () => {
     try {
-      const data = await getUsers();
-      setUsers(data);
+      const data = await users.getAll();
+      setUsersList(data);
     } catch (error) {
       console.error("Failed to fetch users", error);
       Alert.alert("Error", "Failed to fetch users");
@@ -39,42 +33,7 @@ export default function UsersScreen() {
   }, []);
 
   const handleCreate = async () => {
-    if (!name || !hostel) {
-      Alert.alert("Validation Error", "Please fill all fields");
-      return;
-    }
-
-    try {
-      await createUser({ name, hostel, role });
-      setName("");
-      setHostel("");
-      setRole("STUDENT");
-      Alert.alert("Success", "User created! ✅");
-      fetchUsers();
-    } catch (error) {
-      Alert.alert("Error", "Failed to create user");
-      console.error("Failed to create user", error);
-    }
-  };
-
-  const handleUpdate = async () => {
-    if (!name || !hostel || !editingId) {
-      Alert.alert("Validation Error", "Please fill all fields");
-      return;
-    }
-
-    try {
-      await updateUser(editingId, { name, hostel, role });
-      setName("");
-      setHostel("");
-      setRole("STUDENT");
-      setEditingId(null);
-      Alert.alert("Success", "User updated! ✅");
-      fetchUsers();
-    } catch (error) {
-      Alert.alert("Error", "Failed to update user");
-      console.error("Failed to update user", error);
-    }
+    Alert.alert("Info", "New users are created through the signup process. This admin panel only allows deleting users.");
   };
 
   const handleDelete = async (id: string) => {
@@ -85,7 +44,7 @@ export default function UsersScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            await deleteUser(id);
+            await users.delete(id);
             Alert.alert("Success", "User deleted! ✅");
             fetchUsers();
           } catch (error) {
@@ -97,112 +56,24 @@ export default function UsersScreen() {
     ]);
   };
 
-  const handleEditStart = (user: any) => {
-    setEditingId(user._id);
-    setName(user.name);
-    setHostel(user.hostel);
-    setRole(user.role);
-  };
-
-  const handleEditCancel = () => {
-    setEditingId(null);
-    setName("");
-    setHostel("");
-    setRole("STUDENT");
-  };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <View style={styles.container}>
-        <TopBar title="Users" />
+        <TopBar title="Users (Admin)" />
 
-        {/* FORM */}
+        {/* INFO */}
         <Card>
           <Text style={[styles.formTitle, { color: theme.text }]}>
-            {editingId ? "Edit User" : "Create User"}
+            User Management
           </Text>
-
-          <TextInput
-            placeholder="Name"
-            placeholderTextColor={theme.subtext}
-            value={name}
-            onChangeText={setName}
-            style={[
-              styles.input,
-              {
-                color: theme.text,
-                backgroundColor: theme.bg,
-                borderColor: theme.border,
-              },
-            ]}
-          />
-
-          <TextInput
-            placeholder={role === "OUTLET_OWNER" ? "Outlet" : "Hostel"}
-            placeholderTextColor={theme.subtext}
-            value={hostel}
-            onChangeText={setHostel}
-            style={[
-              styles.input,
-              {
-                color: theme.text,
-                backgroundColor: theme.bg,
-                borderColor: theme.border,
-              },
-            ]}
-          />
-
-          {/* ROLE SELECT */}
-          <View style={styles.roleRow}>
-            {["STUDENT", "OUTLET_OWNER"].map((r) => (
-              <Pressable
-                key={r}
-                onPress={() => setRole(r as any)}
-                style={[
-                  styles.roleButton,
-                  {
-                    backgroundColor:
-                      role === r ? theme.primary : theme.card,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: role === r ? "#fff" : theme.text,
-                    fontWeight: "600",
-                  }}
-                >
-                  {r}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* ACTION BUTTONS */}
-          <View style={styles.buttonRow}>
-            <View style={{ flex: 1 }}>
-              <GradientButton
-                title={editingId ? "Update User" : "Create User"}
-                onPress={editingId ? handleUpdate : handleCreate}
-              />
-            </View>
-            {editingId && (
-              <Pressable
-                onPress={handleEditCancel}
-                style={[styles.cancelBtn, { borderColor: theme.border }]}
-              >
-                <Text style={{ color: theme.text, fontWeight: "600" }}>
-                  Cancel
-                </Text>
-              </Pressable>
-            )}
-          </View>
+          <Text style={{ color: theme.subtext, marginBottom: 12 }}>
+            View all users and manage their accounts. New users are created through the signup process.
+          </Text>
         </Card>
 
         {/* LIST */}
         <FlatList
-          data={users}
+          data={usersList}
           keyExtractor={(item) => item._id}
           contentContainerStyle={{ paddingBottom: 120 }}
           ListEmptyComponent={
@@ -217,6 +88,9 @@ export default function UsersScreen() {
               </Text>
 
               <Text style={{ color: theme.subtext, marginBottom: 4 }}>
+                Email: {item.email}
+              </Text>
+              <Text style={{ color: theme.subtext, marginBottom: 4 }}>
                 Role: {item.role}
               </Text>
               <Text style={{ color: theme.subtext, marginBottom: 12 }}>
@@ -225,18 +99,10 @@ export default function UsersScreen() {
 
               <View style={styles.cardActions}>
                 <Pressable
-                  onPress={() => handleEditStart(item)}
-                  style={[styles.editBtn, { borderColor: theme.primary }]}
-                >
-                  <Text style={{ color: theme.primary, fontWeight: "600" }}>
-                    Edit
-                  </Text>
-                </Pressable>
-                <Pressable
                   onPress={() => handleDelete(item._id)}
-                  style={styles.deleteBtn}
+                  style={[styles.deleteBtn, { flex: 1 }]}
                 >
-                  <Text style={styles.deleteText}>Delete</Text>
+                  <Text style={styles.deleteText}>Delete User</Text>
                 </Pressable>
               </View>
             </Card>

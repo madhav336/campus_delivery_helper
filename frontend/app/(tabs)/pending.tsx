@@ -10,9 +10,8 @@ import {
   TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback } from "react";
 import { availability } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
@@ -50,7 +49,9 @@ export default function PendingScreen() {
     }
   }, []);
 
-  useFocusEffect(loadPending);
+  useFocusEffect(useCallback(() => {
+    loadPending();
+  }, [loadPending]));
 
   const handleRespond = (request: AvailabilityRequest, isAvailable: boolean) => {
     setSelectedRequest(request);
@@ -93,7 +94,7 @@ export default function PendingScreen() {
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
         <TopBar title="Pending Requests" />
         <View style={styles.centered}>
-          <Ionicons name="inbox" size={48} color={theme.subtext} />
+          <Ionicons name="mail" size={48} color={theme.subtext} />
           <Text style={[styles.emptyText, { color: theme.text, marginTop: 12 }]}>
             No pending requests
           </Text>

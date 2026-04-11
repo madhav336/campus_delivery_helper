@@ -10,9 +10,8 @@ import {
   TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback } from "react";
 import { requests } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
@@ -53,7 +52,9 @@ export default function ActivityScreen() {
     }
   }, []);
 
-  useFocusEffect(loadActivity);
+  useFocusEffect(useCallback(() => {
+    loadActivity();
+  }, [loadActivity]));
 
   const handleCompleteRequest = async (id: string) => {
     Alert.alert("Complete Request", "Mark this delivery as completed?", [
@@ -142,7 +143,7 @@ export default function ActivityScreen() {
 
             <View style={styles.details}>
               <View style={styles.detailRow}>
-                <Ionicons name="clock-outline" size={14} color={theme.subtext} />
+                <Ionicons name="time" size={14} color={theme.subtext} />
                 <Text style={[styles.detailText, { color: theme.subtext }]}>
                   Created {new Date(request.createdAt).toLocaleDateString()}
                 </Text>

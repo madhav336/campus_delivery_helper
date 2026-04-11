@@ -141,7 +141,7 @@ export default function SignupScreen({ navigation }: any) {
           </>
         )}
 
-        <GradientButton title="Create Account" onPress={handleSignup} disabled={loading} />
+        <GradientButton title={loading ? "Creating..." : "Create Account"} onPress={handleSignup} />
 
         <Pressable onPress={() => navigation.navigate('Login')}>
           <Text style={[styles.link, { color: theme.primary }]}>Already have an account? Login</Text>

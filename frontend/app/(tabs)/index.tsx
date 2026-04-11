@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { requests } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
@@ -50,7 +50,9 @@ export default function RequestsScreen() {
     }
   }, []);
 
-  useFocusEffect(loadRequests);
+  useFocusEffect(useCallback(() => {
+    loadRequests();
+  }, [loadRequests]));
 
   const handleDelete = (id: string) => {
     Alert.alert("Delete Request", "Are you sure?", [
