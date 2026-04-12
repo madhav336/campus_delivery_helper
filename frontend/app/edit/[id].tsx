@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { updateRequest } from "@/services/api";
+import { requests } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -49,7 +49,7 @@ export default function EditScreen() {
 
   const handleUpdate = async () => {
     try {
-      await updateRequest(id, {
+      await requests.update(id, {
         itemDescription: item,
         outlet: finalOutlet,
         hostel,

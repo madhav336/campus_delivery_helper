@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { requests } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
@@ -20,23 +21,39 @@ import { Ionicons } from "@expo/vector-icons";
 interface DeliveryRequest {
   _id: string;
   itemDescription: string;
-  outlet: string;
+  outlet: string | { _id: string; name: string; locationDescription?: string };
   hostel: string;
   fee: number;
   status: string;
-  requestedBy: string;
-  acceptedBy?: string;
+  requestedBy: string | { _id: string; name: string; phone?: string };
+  acceptedBy?: string | { _id: string; name: string; phone?: string };
   createdAt: string;
 }
 
 export default function RequestsScreen() {
-  const { theme, mode } = useTheme();
+  const { theme } = useTheme();
 
   const [requestsList, setRequestsList] = useState<DeliveryRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "fee">("newest");
   const [filterOutlet, setFilterOutlet] = useState("ALL");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadCurrentUserId = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUserId(user._id);
+        }
+      } catch (error) {
+        console.error('Failed to load user ID:', error);
+      }
+    };
+    loadCurrentUserId();
+  }, []);
 
   const loadRequests = useCallback(async () => {
     try {
@@ -53,25 +70,6 @@ export default function RequestsScreen() {
   useFocusEffect(useCallback(() => {
     loadRequests();
   }, [loadRequests]));
-
-  const handleDelete = (id: string) => {
-    Alert.alert("Delete Request", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await requests.delete(id);
-            Alert.alert("Success", "Request deleted! ✅");
-            loadRequests();
-          } catch (error) {
-            Alert.alert("Error", "Failed to delete");
-          }
-        },
-      },
-    ]);
-  };
 
   const handleAccept = (id: string) => {
     Alert.alert("Accept Request", "Accept this delivery?", [
@@ -91,37 +89,32 @@ export default function RequestsScreen() {
     ]);
   };
 
-  // Filter & sort
-  const filtered = requestsList
-    .filter((r) => {
-      const q = searchQuery.toLowerCase();
-      return (
-        r.itemDescription.toLowerCase().includes(q) ||
-        r.outlet.toLowerCase().includes(q)
+  const filteredRequests = (requestsList || []).filter((req) => {
+    const matchesSearch =
+      req.itemDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      req.hostel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (typeof req.outlet === 'object' 
+        ? req.outlet.name.toLowerCase().includes(searchQuery.toLowerCase())
+        : req.outlet.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    })
-    .filter((r) => {
-      if (filterOutlet === "ALL") return true;
-      if (filterOutlet === "Other") {
-        return !["ANC 1", "ANC 2", "CP"].includes(r.outlet);
-      }
-      return r.outlet === filterOutlet;
-    });
 
-  const sorted = [...filtered].sort((a, b) => {
-    const statusOrder = { OPEN: 0, IN_PROGRESS: 1, COMPLETED: 2 };
-    const aOrder = statusOrder[a.status as keyof typeof statusOrder] || 0;
-    const bOrder = statusOrder[b.status as keyof typeof statusOrder] || 0;
+    const matchesOutlet = filterOutlet === "ALL" || 
+      (typeof req.outlet === 'object' 
+        ? req.outlet.name === filterOutlet 
+        : req.outlet === filterOutlet
+      );
 
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    if (sortBy === "fee") return b.fee - a.fee;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return matchesSearch && matchesOutlet;
   });
+
+  const displayedRequests = sortBy === "newest" 
+    ? filteredRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    : filteredRequests.sort((a, b) => b.fee - a.fee);
 
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <TopBar title="Requests" />
+        <TopBar title="Delivery Board" />
         <View style={styles.centered}>
           <ActivityIndicator size="large" />
         </View>
@@ -131,102 +124,94 @@ export default function RequestsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      <TopBar title="Requests" />
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 120 }]}>
-        {/* SEARCH */}
+      <TopBar title="Delivery Board" />
+
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+        {/* SEARCH AND FILTERS */}
         <Card>
+          <Text style={[styles.label, { color: theme.text }]}>Search</Text>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search item or outlet..."
+            placeholder="Search by item, hostel, or outlet..."
             placeholderTextColor={theme.subtext}
             style={[
-              styles.input,
+              styles.searchInput,
               {
-                backgroundColor: theme.bg,
-                borderColor: theme.border,
                 color: theme.text,
+                borderColor: theme.border,
+                backgroundColor: theme.bg,
               },
             ]}
           />
-        </Card>
 
-        {/* CONTROLS */}
-        <Card>
-          <Text style={[styles.label, { color: theme.text }]}>Sort</Text>
-          <View style={styles.row}>
-            {["newest", "fee"].map((type) => (
+          <View style={styles.filterRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: theme.text }, { marginBottom: 6 }]}>
+                Outlet
+              </Text>
               <Pressable
-                key={type}
-                onPress={() => setSortBy(type as any)}
                 style={[
-                  styles.chip,
+                  styles.filterTab,
                   {
-                    backgroundColor:
-                      sortBy === type ? theme.primary : theme.card,
+                    backgroundColor: filterOutlet === "ALL" ? theme.primary : theme.bg,
                     borderColor: theme.border,
                   },
                 ]}
+                onPress={() => setFilterOutlet("ALL")}
               >
                 <Text
-                  style={{
-                    color: sortBy === type ? "#fff" : theme.text,
-                    fontWeight: "600",
-                    fontSize: 11,
-                  }}
+                  style={[
+                    styles.filterTabText,
+                    { color: filterOutlet === "ALL" ? "#fff" : theme.text },
+                  ]}
                 >
-                  {type === "newest" ? "Newest" : "Fee"}
+                  All
                 </Text>
               </Pressable>
-            ))}
-          </View>
+            </View>
 
-          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-            Outlet
-          </Text>
-          <View style={styles.row}>
-            {["ALL", "ANC 1", "ANC 2", "CP", "Other"].map((outlet) => (
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <Text style={[styles.label, { color: theme.text }, { marginBottom: 6 }]}>
+                Sort
+              </Text>
               <Pressable
-                key={outlet}
-                onPress={() => setFilterOutlet(outlet)}
                 style={[
-                  styles.chip,
+                  styles.filterTab,
                   {
-                    backgroundColor:
-                      filterOutlet === outlet
-                        ? theme.primary
-                        : theme.card,
+                    backgroundColor: sortBy === "newest" ? theme.primary : theme.bg,
                     borderColor: theme.border,
                   },
                 ]}
+                onPress={() => setSortBy(sortBy === "newest" ? "fee" : "newest")}
               >
                 <Text
-                  style={{
-                    color: filterOutlet === outlet ? "#fff" : theme.text,
-                    fontWeight: "600",
-                    fontSize: 11,
-                  }}
+                  style={[
+                    styles.filterTabText,
+                    { color: sortBy === "newest" ? "#fff" : theme.text },
+                  ]}
                 >
-                  {outlet}
+                  {sortBy === "newest" ? "🕐 Newest" : "💰 High Fee"}
                 </Text>
               </Pressable>
-            ))}
+            </View>
           </View>
         </Card>
 
-        {/* LIST */}
-        {sorted.length === 0 ? (
+        {/* REQUESTS LIST */}
+        {displayedRequests.length === 0 ? (
           <Card>
             <Text style={[styles.emptyText, { color: theme.subtext }]}>
-              No requests found
+              No delivery requests available
             </Text>
           </Card>
         ) : (
-          sorted.map((req) => {
-            const canAccept = req.status === "OPEN" && mode === "STUDENT" && req.requestedBy !== (global as any).currentUserId;
-            const canDelete = req.status === "OPEN" && req.requestedBy === (global as any).currentUserId;
-            const isAccepted = req.status === "IN_PROGRESS";
-            const isCompleted = req.status === "COMPLETED";
+          displayedRequests.map((req) => {
+            const canAccept = req.status === "OPEN" && 
+              (typeof req.requestedBy === 'object' 
+                ? req.requestedBy._id !== currentUserId 
+                : req.requestedBy !== currentUserId
+              );
 
             return (
               <Card key={req._id}>
@@ -236,7 +221,7 @@ export default function RequestsScreen() {
                       {req.itemDescription}
                     </Text>
                     <Text style={[styles.details, { color: theme.subtext }]}>
-                      {req.outlet} → {req.hostel}
+                      {typeof req.outlet === 'object' ? req.outlet?.name : req.outlet} → {req.hostel}
                     </Text>
                   </View>
                   <View style={[styles.feeBadge, { backgroundColor: theme.primary + "20" }]}>
@@ -246,60 +231,22 @@ export default function RequestsScreen() {
                   </View>
                 </View>
 
-                <View style={styles.status}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor:
-                          req.status === "OPEN"
-                            ? "#ef4444"
-                            : req.status === "IN_PROGRESS"
-                            ? "#f59e0b"
-                            : "#10b981",
-                      },
-                    ]}
+                {canAccept && (
+                  <Pressable
+                    onPress={() => handleAccept(req._id)}
+                    style={[styles.button, { backgroundColor: theme.primary, marginTop: 12 }]}
                   >
-                    <Text style={styles.statusText}>{req.status}</Text>
-                  </View>
-                  {isAccepted && (
-                    <Text style={[styles.accepted, { color: theme.subtext }]}>
-                      by {req.acceptedBy?.split("@")[0]}
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 8 }}>
+                      Accept Delivery
                     </Text>
-                  )}
-                </View>
+                  </Pressable>
+                )}
 
-                {(canAccept || canDelete || isAccepted || isCompleted) && (
-                  <View style={styles.actions}>
-                    {canAccept && (
-                      <Pressable
-                        onPress={() => handleAccept(req._id)}
-                        style={[
-                          styles.button,
-                          { backgroundColor: theme.primary },
-                        ]}
-                      >
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                        <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 4, fontSize: 12 }}>
-                          Accept
-                        </Text>
-                      </Pressable>
-                    )}
-                    {canDelete && (
-                      <Pressable
-                        onPress={() => handleDelete(req._id)}
-                        style={[
-                          styles.button,
-                          { backgroundColor: "#ef4444" },
-                        ]}
-                      >
-                        <Ionicons name="trash" size={16} color="#fff" />
-                        <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 4, fontSize: 12 }}>
-                          Delete
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
+                {!canAccept && (
+                  <Text style={[styles.disabledText, { color: theme.subtext, marginTop: 8 }]}>
+                    {req.status === "IN_PROGRESS" ? "✓ In Progress" : "Your request"}
+                  </Text>
                 )}
               </Card>
             );
@@ -319,88 +266,71 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  input: {
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  searchInput: {
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
+    marginBottom: 12,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  row: {
+  filterRow: {
     flexDirection: "row",
-    gap: 6,
-    flexWrap: "wrap",
+    gap: 8,
   },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+  filterTab: {
     borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  filterTabText: {
+    fontSize: 12,
+    fontWeight: "500",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 10,
+    paddingVertical: 8,
   },
   item: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   details: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 4,
   },
   feeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: "center",
   },
   fee: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
-  },
-  status: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  accepted: {
-    fontSize: 10,
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 8,
   },
   button: {
-    flex: 1,
     flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   emptyText: {
     textAlign: "center",
-    fontSize: 14,
-    fontWeight: "600",
+    paddingVertical: 20,
+  },
+  disabledText: {
+    fontSize: 12,
+    fontStyle: "italic",
   },
 });

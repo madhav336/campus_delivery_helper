@@ -19,7 +19,7 @@ import GradientButton from "@/components/ui/GradientButton";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
-  const { theme, mode } = useTheme();
+  const { theme, userRole, setUserRole } = useTheme();
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -33,12 +33,36 @@ export default function ProfileScreen() {
 
   const loadProfile = async () => {
     try {
+      setLoading(true);
+      console.log("🔄 Loading profile...");
       const data = await users.getMe();
+      console.log("✅ Profile data retrieved:", data);
+      
+      if (!data) {
+        // If getMe returns null/undefined, token is likely invalid
+        console.log("❌ No profile data returned, logging out...");
+        await auth.logout();
+        setUserRole(null);
+        router.replace("/(auth)/login");
+        return;
+      }
+      
       setProfile(data);
-      setPhone(data.phone || "");
-      setHostel(data.hostel || "");
+      setPhone(data?.phone || "");
+      setHostel(data?.hostel || "");
+      console.log("✅ Profile state updated successfully");
     } catch (error) {
-      Alert.alert("Error", "Failed to load profile");
+      console.error("❌ Profile load error:", error);
+      console.error("Error details:", error instanceof Error ? error.message : JSON.stringify(error));
+      // On error, logout and redirect to login (likely invalid token)
+      try {
+        await auth.logout();
+      } catch (logoutErr) {
+        console.error("Logout error:", logoutErr);
+      }
+      setTimeout(() => {
+        router.replace("/(auth)/login");
+      }, 500);
     } finally {
       setLoading(false);
     }
@@ -63,7 +87,8 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: async () => {
           await auth.logout();
-          router.replace("/(auth)/login" as any);
+          setUserRole(null);
+          router.replace("/(auth)/login");
         },
       },
     ]);
@@ -118,7 +143,7 @@ export default function ProfileScreen() {
         </Card>
 
         {/* STATS */}
-        {mode === "STUDENT" && (
+        {userRole === "student" && (
           <Card>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>
               Stats
@@ -162,7 +187,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.infoRow}>
                 <Text style={[styles.label, { color: theme.subtext }]}>
-                  {mode === "STUDENT" ? "Hostel" : "Outlet"}
+                  {userRole === "student" ? "Hostel" : "Outlet"}
                 </Text>
                 <Text style={[styles.value, { color: theme.text }]}>
                   {hostel || "Not set"}
@@ -197,7 +222,7 @@ export default function ProfileScreen() {
               />
 
               <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                {mode === "STUDENT" ? "Hostel" : "Outlet"}
+                {userRole === "student" ? "Hostel" : "Outlet"}
               </Text>
               <TextInput
                 value={hostel}

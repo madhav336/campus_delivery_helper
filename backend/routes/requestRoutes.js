@@ -1,5 +1,6 @@
 const express = require('express');
 const DeliveryRequest = require('../models/DeliveryRequest');
+const Outlet = require('../models/Outlet');
 const User = require('../models/User');
 const { verifyToken, requireRole } = require('../middleware/auth');
 
@@ -17,9 +18,20 @@ router.post('/', verifyToken, requireRole('student'), async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Handle outlet: convert name to ObjectId if needed
+    let outletId = outlet;
+    if (!outlet.match(/^[0-9a-fA-F]{24}$/)) {
+      // It's not an ObjectId, so try to find outlet by name
+      const outletDoc = await Outlet.findOne({ name: outlet });
+      if (!outletDoc) {
+        return res.status(400).json({ message: `Outlet "${outlet}" not found` });
+      }
+      outletId = outletDoc._id;
+    }
+
     const deliveryReq = new DeliveryRequest({
       itemDescription,
-      outlet,
+      outlet: outletId,
       hostel,
       fee,
       status: 'OPEN',
@@ -58,9 +70,15 @@ router.get('/', verifyToken, async (req, res) => {
         requestedBy: { $ne: req.user.userId }
       };
 
-      // Apply filters
+      // Apply filters - search by outlet name
       if (outlet) {
-        query.outlet = new RegExp(outlet, 'i');
+        const outletDoc = await Outlet.findOne({ name: new RegExp(outlet, 'i') });
+        if (outletDoc) {
+          query.outlet = outletDoc._id;
+        } else {
+          // No matching outlet, return empty array
+          return res.json({ requests: [] });
+        }
       }
       if (minFee || maxFee) {
         query.fee = {};
@@ -90,6 +108,7 @@ router.get('/', verifyToken, async (req, res) => {
     const requests = await DeliveryRequest.find(query)
       .populate('requestedBy', 'name phone requesterRating delivererRating')
       .populate('acceptedBy', 'name phone requesterRating delivererRating')
+      .populate('outlet', 'name locationDescription')
       .sort(sort);
 
     res.json({ requests });
@@ -106,7 +125,8 @@ router.get('/:id', verifyToken, async (req, res) => {
   try {
     const request = await DeliveryRequest.findById(req.params.id)
       .populate('requestedBy', 'name email phone requesterRating delivererRating')
-      .populate('acceptedBy', 'name email phone requesterRating delivererRating');
+      .populate('acceptedBy', 'name email phone requesterRating delivererRating')
+      .populate('outlet', 'name locationDescription');
 
     if (!request) {
       return res.status(404).json({ message: 'Request not found' });

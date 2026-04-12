@@ -165,7 +165,7 @@ export default function AnalyticsScreen() {
                 <View style={styles.statCard}>
                   <Ionicons name="cash" size={24} color={theme.primary} />
                   <Text style={[styles.statValue, { color: theme.text }]}>
-                    ₹{summary.avgRequestFee.toFixed(0)}
+                    ₹{summary.avgRequestFee ? summary.avgRequestFee.toFixed(0) : "0"}
                   </Text>
                   <Text style={[styles.statLabel, { color: theme.subtext }]}>
                     Avg Fee

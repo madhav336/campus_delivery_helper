@@ -21,7 +21,11 @@ export default function UsersScreen() {
   const fetchUsers = async () => {
     try {
       const data = await users.getAll();
-      setUsersList(data);
+      // Filter out outlet owners - show only students and admins
+      const filteredUsers = (data.users || []).filter(
+        (user: any) => user.role !== 'outlet_owner'
+      );
+      setUsersList(filteredUsers);
     } catch (error) {
       console.error("Failed to fetch users", error);
       Alert.alert("Error", "Failed to fetch users");
@@ -91,11 +95,13 @@ export default function UsersScreen() {
                 Email: {item.email}
               </Text>
               <Text style={{ color: theme.subtext, marginBottom: 4 }}>
-                Role: {item.role}
+                Role: {item.role === 'student' ? 'Student' : 'Admin'}
               </Text>
-              <Text style={{ color: theme.subtext, marginBottom: 12 }}>
-                {item.role === "OUTLET_OWNER" ? "Outlet" : "Hostel"}: {item.hostel}
-              </Text>
+              {item.hostel && (
+                <Text style={{ color: theme.subtext, marginBottom: 12 }}>
+                  Hostel: {item.hostel}
+                </Text>
+              )}
 
               <View style={styles.cardActions}>
                 <Pressable

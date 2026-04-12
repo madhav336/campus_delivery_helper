@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.16.137.73:5000/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 // ============= AUTH SERVICE =============
 
@@ -32,8 +32,11 @@ export const auth = {
       throw new Error(error.message || 'Login failed');
     }
     const result = await response.json();
+    console.log("✅ Login response:", result);
     await AsyncStorage.setItem('token', result.token);
+    console.log("✅ Token stored:", result.token.substring(0, 20) + "...");
     await AsyncStorage.setItem('user', JSON.stringify(result.user));
+    console.log("✅ User stored:", result.user);
     return result;
   },
 
@@ -50,6 +53,7 @@ export const auth = {
 // Helper to add auth header
 async function getHeaders() {
   const token = await auth.getToken();
+  console.log("🔐 Token retrieved:", token ? `${token.substring(0, 20)}...` : "NO TOKEN");
   return {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` })
@@ -78,7 +82,8 @@ export const requests = {
     
     const response = await fetch(url.toString(), { headers });
     if (!response.ok) throw new Error('Failed to fetch requests');
-    return response.json();
+    const data = await response.json();
+    return data.requests || [];
   },
 
   async getById(id: string) {
@@ -159,21 +164,24 @@ export const availability = {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/availability?filter=own`, { headers });
     if (!response.ok) throw new Error('Failed to fetch own requests');
-    return response.json();
+    const data = await response.json();
+    return data.requests || [];
   },
 
   async getPublic() {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/availability?filter=public`, { headers });
     if (!response.ok) throw new Error('Failed to fetch public requests');
-    return response.json();
+    const data = await response.json();
+    return data.requests || [];
   },
 
   async getPending() {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/availability/pending/all`, { headers });
     if (!response.ok) throw new Error('Failed to fetch pending requests');
-    return response.json();
+    const data = await response.json();
+    return data.requests || [];
   },
 
   async respond(id: string, available: boolean) {
@@ -213,10 +221,25 @@ export const availability = {
 
 export const users = {
   async getMe() {
-    const headers = await getHeaders();
-    const response = await fetch(`${BASE_URL}/users/me`, { headers });
-    if (!response.ok) throw new Error('Failed to fetch profile');
-    return response.json();
+    try {
+      const headers = await getHeaders();
+      console.log("🔄 Fetching profile with headers:", headers);
+      const response = await fetch(`${BASE_URL}/users/me`, { headers });
+      console.log("📡 Profile response status:", response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("❌ Profile fetch failed:", errorData);
+        throw new Error('Failed to fetch profile');
+      }
+      
+      const data = await response.json();
+      console.log("✅ Profile response data:", data);
+      return data.user || null;
+    } catch (error) {
+      console.error("❌ getMe error:", error);
+      throw error;
+    }
   },
 
   async getById(id: string) {
@@ -265,13 +288,49 @@ export const outlets = {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/outlets`, { headers });
     if (!response.ok) throw new Error('Failed to fetch outlets');
-    return response.json();
+    const data = await response.json();
+    return data.outlets || [];
   },
 
   async getById(id: string) {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/outlets/${id}`, { headers });
     if (!response.ok) throw new Error('Failed to fetch outlet');
+    return response.json();
+  },
+
+  async create(name: string, locationDescription: string, ownerId: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/outlets`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name, locationDescription, ownerId })
+    });
+    if (!response.ok) throw new Error('Failed to create outlet');
+    return response.json();
+  },
+
+  async update(id: string, name: string, locationDescription: string, ownerId?: string) {
+    const headers = await getHeaders();
+    const body: any = { name, locationDescription };
+    if (ownerId) body.ownerId = ownerId;
+    
+    const response = await fetch(`${BASE_URL}/outlets/${id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) throw new Error('Failed to update outlet');
+    return response.json();
+  },
+
+  async delete(id: string) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/outlets/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!response.ok) throw new Error('Failed to delete outlet');
     return response.json();
   }
 };

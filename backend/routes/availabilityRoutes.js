@@ -18,6 +18,12 @@ router.post('/', verifyToken, requireRole('student'), async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Verify outlet exists
+    const outletDoc = await Outlet.findById(outlet);
+    if (!outletDoc) {
+      return res.status(404).json({ message: 'Outlet not found' });
+    }
+
     // Set expiresAt to next midnight
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 1);
@@ -32,6 +38,7 @@ router.post('/', verifyToken, requireRole('student'), async (req, res) => {
     });
 
     await availReq.save();
+    await availReq.populate('outlet', 'name locationDescription');
     res.status(201).json({ message: 'Availability request created', request: availReq });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -60,6 +67,7 @@ router.get('/', verifyToken, async (req, res) => {
 
     const requests = await AvailabilityRequest.find(query)
       .populate('requestedBy', 'name phone')
+      .populate('outlet', 'name locationDescription')
       .populate('response.respondedBy', 'name phone')
       .sort({ createdAt: -1 });
 
@@ -70,18 +78,23 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 /**
- * GET /api/availability/pending
+ * GET /api/availability/pending/all
  * Get pending requests for outlet owner (their outlet only)
  */
 router.get('/pending/all', verifyToken, requireRole('outlet_owner'), async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.user.userId).populate('outletId');
+
+    if (!user || !user.outletId) {
+      return res.json({ requests: [] });
+    }
 
     const requests = await AvailabilityRequest.find({
-      outlet: user?.outletId ? (await Outlet.findById(user.outletId))?.name : null,
+      outlet: user.outletId._id,
       status: 'PENDING'
     })
       .populate('requestedBy', 'name phone')
+      .populate('outlet', 'name locationDescription')
       .sort({ createdAt: -1 });
 
     res.json({ requests });
@@ -98,6 +111,7 @@ router.get('/:id', verifyToken, async (req, res) => {
   try {
     const request = await AvailabilityRequest.findById(req.params.id)
       .populate('requestedBy', 'name email phone')
+      .populate('outlet', 'name locationDescription')
       .populate('response.respondedBy', 'name email phone');
 
     if (!request) {
@@ -133,9 +147,17 @@ router.put('/:id', verifyToken, requireRole('student'), async (req, res) => {
 
     const { itemName, outlet } = req.body;
     if (itemName) request.itemName = itemName;
-    if (outlet) request.outlet = outlet;
+    if (outlet) {
+      // Verify outlet exists
+      const outletDoc = await Outlet.findById(outlet);
+      if (!outletDoc) {
+        return res.status(404).json({ message: 'Outlet not found' });
+      }
+      request.outlet = outlet;
+    }
 
     await request.save();
+    await request.populate('outlet', 'name locationDescription');
     res.json({ message: 'Request updated', request });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
@@ -182,10 +204,17 @@ router.put('/:id/respond', verifyToken, requireRole('outlet_owner'), async (req,
       return res.status(400).json({ message: 'Available must be true or false' });
     }
 
-    const request = await AvailabilityRequest.findById(req.params.id);
+    const request = await AvailabilityRequest.findById(req.params.id)
+      .populate('outlet');
 
     if (!request) {
       return res.status(404).json({ message: 'Request not found' });
+    }
+
+    // Verify this request is for the outlet owner's outlet
+    const user = await User.findById(req.user.userId);
+    if (!user.outletId || user.outletId.toString() !== request.outlet._id.toString()) {
+      return res.status(403).json({ message: 'Can only respond to requests for your outlet' });
     }
 
     // Set response
@@ -197,42 +226,11 @@ router.put('/:id/respond', verifyToken, requireRole('outlet_owner'), async (req,
     };
 
     await request.save();
+    await request.populate('outlet', 'name locationDescription');
     res.json({ message: 'Response recorded', request });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
-});
-
-module.exports = router;
-
-
-// DELETE
-router.delete('/:id', async (req, res) => {
-    try {
-        const request = await AvailabilityRequest.findByIdAndDelete(req.params.id);
-
-        if (!request) {
-            return res.status(404).json({ message: "Request not found" });
-        }
-
-        res.json({ message: "Request deleted successfully" });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-
-// CLEANUP
-router.delete('/cleanup/all', async (req, res) => {
-    try {
-        const result = await AvailabilityRequest.deleteMany({});
-        res.json({
-            message: "All availability requests deleted",
-            deleted: result.deletedCount
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
 });
 
 module.exports = router;

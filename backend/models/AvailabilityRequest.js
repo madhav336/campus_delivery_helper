@@ -6,7 +6,8 @@ const availabilityRequestSchema = new mongoose.Schema({
         required: true
     },
     outlet: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Outlet',
         required: true
     },
     requestedBy: {

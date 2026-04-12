@@ -22,7 +22,7 @@ interface AvailabilityRequest {
   _id: string;
   itemName: string;
   outlet: string;
-  requestedBy: string;
+  requestedBy: string | { _id: string; name: string; phone?: string; email?: string };
   status: string;
   createdAt: string;
   expiresAt: string;
@@ -110,7 +110,7 @@ export default function PendingScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <TopBar title="Pending Requests" />
       <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
-        {pending.map((request) => {
+        {(pending || []).map((request) => {
           const expiresAt = new Date(request.expiresAt);
           const now = new Date();
           const hoursLeft = Math.max(0, Math.round((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60)));
@@ -123,7 +123,7 @@ export default function PendingScreen() {
                     {request.itemName}
                   </Text>
                   <Text style={[styles.requester, { color: theme.subtext }]}>
-                    from {request.requestedBy?.split("@")[0]}
+                    from {typeof request.requestedBy === 'object' ? request.requestedBy?.name : request.requestedBy?.split("@")[0]}
                   </Text>
                 </View>
                 <View
@@ -151,7 +151,7 @@ export default function PendingScreen() {
               </View>
 
               <Text style={[styles.outlet, { color: theme.text, marginTop: 8 }]}>
-                📍 {request.outlet}
+                📍 {typeof request.outlet === 'object' ? request.outlet?.name : request.outlet}
               </Text>
               <Text
                 style={[
