@@ -25,17 +25,7 @@ async function seed() {
     const krithikPassword = await bcrypt.hash('krithik', 10);
     const madhavPassword = await bcrypt.hash('madhav', 10);
     const studentPassword = await bcrypt.hash('student123', 10);
-    const outletPassword = await bcrypt.hash('outlet123', 10);
-
-    // ===== CREATE OUTLETS =====
-    const outlets = await Outlet.insertMany([
-      { name: "McDonald's", locationDescription: 'Near Gate 1, Main Campus', isActive: true },
-      { name: 'Subway', locationDescription: 'Food Court Building B', isActive: true },
-      { name: 'Dominos', locationDescription: 'Business District, Next to Library', isActive: true },
-      { name: 'Starbucks', locationDescription: 'Student Center, 2nd Floor', isActive: true },
-      { name: 'Chai Point', locationDescription: 'Central Plaza', isActive: true },
-    ]);
-    console.log(`✅ Created ${outlets.length} outlets`);
+    const outletPassword = await bcrypt.hash('password123', 10);
 
     // ===== CREATE ADMIN ACCOUNTS =====
     const admins = await User.insertMany([
@@ -69,6 +59,48 @@ async function seed() {
     ]);
     console.log(`✅ Created ${admins.length} admin accounts`);
 
+    // ===== CREATE OUTLET OWNER ACCOUNTS (BEFORE OUTLETS) =====
+    const outletOwners = await User.insertMany([
+      {
+        name: 'McDonald Manager',
+        email: 'canteen@outlet.com',
+        password: outletPassword,
+        role: 'outlet_owner',
+        phone: '8000000001',
+        requesterRating: 0,
+        delivererRating: 0
+      },
+      {
+        name: 'Subway Manager',
+        email: 'cafe@outlet.com',
+        password: outletPassword,
+        role: 'outlet_owner',
+        phone: '8000000002',
+        requesterRating: 0,
+        delivererRating: 0
+      },
+      {
+        name: 'Dominos Manager',
+        email: 'pizza@outlet.com',
+        password: outletPassword,
+        role: 'outlet_owner',
+        phone: '8000000003',
+        requesterRating: 0,
+        delivererRating: 0
+      }
+    ]);
+    console.log(`✅ Created ${outletOwners.length} outlet owner accounts`);
+
+    // ===== CREATE OUTLETS WITH OWNERS =====
+    const outlets = await Outlet.insertMany([
+      { name: "McDonald's", locationDescription: 'Near Gate 1, Main Campus', owner: outletOwners[0]._id, isActive: true },
+      { name: 'Subway', locationDescription: 'Food Court Building B', owner: outletOwners[1]._id, isActive: true },
+      { name: 'Dominos', locationDescription: 'Business District, Next to Library', owner: outletOwners[2]._id, isActive: true },
+      { name: 'Starbucks', locationDescription: 'Student Center, 2nd Floor', owner: outletOwners[0]._id, isActive: true },
+      { name: 'Chai Point', locationDescription: 'Central Plaza', owner: outletOwners[1]._id, isActive: true },
+    ]);
+    console.log(`✅ Created ${outlets.length} outlets`);
+
     // ===== CREATE STUDENT ACCOUNTS =====
     const students = await User.insertMany([
       {
@@ -76,7 +108,7 @@ async function seed() {
         email: 'raj@student.com',
         password: studentPassword,
         role: 'student',
-        hostel: 'Hostel A',
+        hostel: 'ANC 1',
         phone: '9000000001',
         requesterRating: 0,
         delivererRating: 0
@@ -86,7 +118,7 @@ async function seed() {
         email: 'priya@student.com',
         password: studentPassword,
         role: 'student',
-        hostel: 'Hostel B',
+        hostel: 'ANC 2',
         phone: '9000000002',
         requesterRating: 0,
         delivererRating: 0
@@ -96,7 +128,7 @@ async function seed() {
         email: 'arjun@student.com',
         password: studentPassword,
         role: 'student',
-        hostel: 'Hostel C',
+        hostel: 'CP',
         phone: '9000000003',
         requesterRating: 0,
         delivererRating: 0
@@ -106,7 +138,7 @@ async function seed() {
         email: 'akshay@student.com',
         password: studentPassword,
         role: 'student',
-        hostel: 'Hostel D',
+        hostel: 'Other',
         phone: '9000000004',
         requesterRating: 0,
         delivererRating: 0
@@ -116,7 +148,7 @@ async function seed() {
         email: 'zara@student.com',
         password: studentPassword,
         role: 'student',
-        hostel: 'Hostel A',
+        hostel: 'ANC 1',
         phone: '9000000005',
         requesterRating: 0,
         delivererRating: 0
@@ -124,47 +156,12 @@ async function seed() {
     ]);
     console.log(`✅ Created ${students.length} student accounts`);
 
-    // ===== CREATE OUTLET OWNER ACCOUNTS =====
-    const outletOwners = await User.insertMany([
-      {
-        name: 'McDonald Manager',
-        email: 'manager@mcdonalds.com',
-        password: outletPassword,
-        role: 'outlet_owner',
-        phone: '8000000001',
-        outletId: outlets[0]._id,
-        requesterRating: 0,
-        delivererRating: 0
-      },
-      {
-        name: 'Subway Manager',
-        email: 'manager@subway.com',
-        password: outletPassword,
-        role: 'outlet_owner',
-        phone: '8000000002',
-        outletId: outlets[1]._id,
-        requesterRating: 0,
-        delivererRating: 0
-      },
-      {
-        name: 'Dominos Manager',
-        email: 'manager@dominos.com',
-        password: outletPassword,
-        role: 'outlet_owner',
-        phone: '8000000003',
-        outletId: outlets[2]._id,
-        requesterRating: 0,
-        delivererRating: 0
-      }
-    ]);
-    console.log(`✅ Created ${outletOwners.length} outlet owner accounts`);
-
     // ===== CREATE SAMPLE DELIVERY REQUESTS =====
     const deliveryRequests = await DeliveryRequest.insertMany([
       {
         itemDescription: 'Large Fries and Coke',
-        outlet: "McDonald's",
-        hostel: 'Hostel A',
+        outlet: outlets[0]._id,
+        hostel: 'ANC 1',
         fee: 30,
         status: 'OPEN',
         requestedBy: students[0]._id,
@@ -173,8 +170,8 @@ async function seed() {
       },
       {
         itemDescription: 'Vegetarian Footlong',
-        outlet: 'Subway',
-        hostel: 'Hostel B',
+        outlet: outlets[1]._id,
+        hostel: 'ANC 2',
         fee: 50,
         status: 'OPEN',
         requestedBy: students[1]._id,
@@ -183,8 +180,8 @@ async function seed() {
       },
       {
         itemDescription: 'Veg Mania Pizza',
-        outlet: 'Dominos',
-        hostel: 'Hostel C',
+        outlet: outlets[2]._id,
+        hostel: 'CP',
         fee: 60,
         status: 'OPEN',
         requestedBy: students[2]._id,
@@ -193,8 +190,8 @@ async function seed() {
       },
       {
         itemDescription: 'Caramel Macchiato',
-        outlet: 'Starbucks',
-        hostel: 'Hostel D',
+        outlet: outlets[3]._id,
+        hostel: 'Other',
         fee: 40,
         status: 'OPEN',
         requestedBy: students[3]._id,
@@ -203,8 +200,8 @@ async function seed() {
       },
       {
         itemDescription: 'Chai Latte with Cookies',
-        outlet: 'Chai Point',
-        hostel: 'Hostel A',
+        outlet: outlets[4]._id,
+        hostel: 'ANC 1',
         fee: 25,
         status: 'OPEN',
         requestedBy: students[4]._id,
@@ -226,9 +223,9 @@ async function seed() {
     console.log('Email: akshay@student.com | Password: student123');
     console.log('Email: zara@student.com | Password: student123');
     console.log('\n=== OUTLET OWNER ACCOUNTS ===');
-    console.log('Email: manager@mcdonalds.com | Password: outlet123');
-    console.log('Email: manager@subway.com | Password: outlet123');
-    console.log('Email: manager@dominos.com | Password: outlet123');
+    console.log('Email: canteen@outlet.com | Password: password123');
+    console.log('Email: cafe@outlet.com | Password: password123');
+    console.log('Email: pizza@outlet.com | Password: password123');
 
     console.log('\n✅ Database seed completed successfully!');
     process.exit(0);

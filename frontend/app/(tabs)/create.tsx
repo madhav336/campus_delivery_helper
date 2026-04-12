@@ -10,61 +10,152 @@ import {
   Keyboard,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "expo-router";
-import { requests } from "@/services/api";
+import { useFocusEffect } from "@react-navigation/native";
+import { requests, availability, outlets } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "@/components/ui/Card";
 import TopBar from "@/components/ui/TopBar";
+import { Ionicons } from "@expo/vector-icons";
+
+interface Outlet {
+  _id: string;
+  name: string;
+  locationDescription: string;
+}
 
 export default function CreateScreen() {
   const router = useRouter();
   const { theme } = useTheme();
 
-  const [item, setItem] = useState("");
-  const [outlet, setOutlet] = useState("");
-  const [customOutlet, setCustomOutlet] = useState("");
+  // Mode selection
+  const [mode, setMode] = useState<"delivery" | "availability">("delivery");
+
+  // Shared states
+  const [outletsList, setOutletsList] = useState<Outlet[]>([]);
+  const [loadingOutlets, setLoadingOutlets] = useState(true);
+
+  // DELIVERY mode states
+  const [deliveryItem, setDeliveryItem] = useState("");
+  const [deliveryOutlet, setDeliveryOutlet] = useState<Outlet | null>(null);
+  const [outletSearch, setOutletSearch] = useState("");
+  const [showOutletDropdown, setShowOutletDropdown] = useState(false);
   const [hostel, setHostel] = useState("");
   const [fee, setFee] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
 
-  const isValid =
-    item && hostel && (outlet !== "Other" || customOutlet) && Number(fee) > 0;
+  // AVAILABILITY mode states
+  const [availabilityItem, setAvailabilityItem] = useState("");
+  const [availabilityOutlet, setAvailabilityOutlet] = useState<Outlet | null>(null);
+  const [availOutletSearch, setAvailOutletSearch] = useState("");
+  const [showAvailOutletDropdown, setShowAvailOutletDropdown] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!isValid) {
-      Alert.alert("Validation Error", "Please fill all fields correctly");
+  const loadOutlets = useCallback(async () => {
+    try {
+      setLoadingOutlets(true);
+      const data = await outlets.getAll();
+      setOutletsList(data);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load outlets");
+    } finally {
+      setLoadingOutlets(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOutlets();
+    }, [loadOutlets])
+  );
+
+  const filteredDeliveryOutlets = (outletsList || []).filter((o) =>
+    o.name.toLowerCase().includes(outletSearch.toLowerCase())
+  );
+
+  const filteredAvailOutlets = (outletsList || []).filter((o) =>
+    o.name.toLowerCase().includes(availOutletSearch.toLowerCase())
+  );
+
+  // ===== DELIVERY CREATE =====
+  const deliveryValid =
+    deliveryItem && deliveryOutlet && hostel && Number(fee) > 0;
+
+  const handleDeliverySubmit = async () => {
+    if (!deliveryValid) {
+      Alert.alert("Validation", "Please fill all delivery fields");
       return;
     }
 
     try {
-      setLoading(true);
+      setDeliveryLoading(true);
       await requests.create(
-        item,
-        outlet === "Other" ? customOutlet : outlet,
+        deliveryItem,
+        deliveryOutlet._id,
         hostel,
         Number(fee)
       );
 
-      Alert.alert("Success", "Request created! ✅");
-
-      // Reset form
-      setItem("");
-      setOutlet("");
-      setCustomOutlet("");
+      Alert.alert("Success", "Delivery request created! ✅");
+      setDeliveryItem("");
+      setDeliveryOutlet(null);
+      setOutletSearch("");
+      setShowOutletDropdown(false);
       setHostel("");
       setFee("");
 
-      // Navigate back
       router.push("/(tabs)");
     } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to create request");
+      Alert.alert("Error", error?.message || "Failed to create delivery request");
     } finally {
-      setLoading(false);
+      setDeliveryLoading(false);
     }
   };
+
+  // ===== AVAILABILITY CREATE =====
+  const availabilityValid = availabilityItem && availabilityOutlet;
+
+  const handleAvailabilitySubmit = async () => {
+    if (!availabilityValid) {
+      Alert.alert("Validation", "Please fill all availability fields");
+      return;
+    }
+
+    try {
+      setAvailabilityLoading(true);
+      await availability.create(availabilityItem, availabilityOutlet._id);
+
+      Alert.alert("Success", "Availability request created! ✅");
+      setAvailabilityItem("");
+      setAvailabilityOutlet(null);
+      setAvailOutletSearch("");
+      setShowAvailOutletDropdown(false);
+
+      router.push("/(tabs)/activity");
+    } catch (error: any) {
+      Alert.alert(
+        "Error",
+        error?.message || "Failed to create availability request"
+      );
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  };
+
+  if (loadingOutlets) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <TopBar title="Create Request" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -72,146 +163,363 @@ export default function CreateScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <TopBar title="Create Request" />
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: 100 }}
           >
-            <TopBar title="Create Request" />
-
-            <View style={styles.container}>
-              <Card>
-                {/* ITEM */}
-                <Text style={[styles.label, { color: theme.text }]}>
-                  Item Description
-                </Text>
-                <TextInput
-                  placeholder="What do you need?"
-                  placeholderTextColor={theme.subtext}
-                  value={item}
-                  onChangeText={setItem}
+            {/* MODE SELECTOR */}
+            <View style={[styles.container, { paddingTop: 0 }]}>
+              <View style={styles.modeSelector}>
+                <Pressable
+                  onPress={() => setMode("delivery")}
                   style={[
-                    styles.input,
+                    styles.modeButton,
                     {
-                      color: theme.text,
-                      borderColor: theme.border,
-                      backgroundColor: theme.bg,
+                      backgroundColor:
+                        mode === "delivery" ? theme.primary : theme.card,
+                      borderBottomColor:
+                        mode === "delivery" ? theme.primary : theme.border,
                     },
                   ]}
-                />
-
-                {/* HOSTEL */}
-                <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                  Hostel
-                </Text>
-                <TextInput
-                  placeholder="Your hostel"
-                  placeholderTextColor={theme.subtext}
-                  value={hostel}
-                  onChangeText={setHostel}
+                >
+                  <Ionicons
+                    name="cube"
+                    size={20}
+                    color={mode === "delivery" ? "#fff" : theme.text}
+                  />
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      {
+                        color:
+                          mode === "delivery" ? "#fff" : theme.text,
+                      },
+                    ]}
+                  >
+                    Delivery
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setMode("availability")}
                   style={[
-                    styles.input,
+                    styles.modeButton,
                     {
-                      color: theme.text,
-                      borderColor: theme.border,
-                      backgroundColor: theme.bg,
+                      backgroundColor:
+                        mode === "availability" ? theme.primary : theme.card,
+                      borderBottomColor:
+                        mode === "availability" ? theme.primary : theme.border,
                     },
                   ]}
-                />
-
-                {/* OUTLET */}
-                <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                  Outlet
-                </Text>
-                <View style={styles.row}>
-                  {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
-                    <Pressable
-                      key={o}
-                      onPress={() => setOutlet(o)}
-                      style={[
-                        styles.chip,
-                        {
-                          backgroundColor:
-                            outlet === o ? theme.primary : theme.card,
-                          borderColor: outlet === o ? theme.primary : theme.border,
-                          borderWidth: 1,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: outlet === o ? "#fff" : theme.text,
-                          fontWeight: "600",
-                          fontSize: 12,
-                        }}
-                      >
-                        {o}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                {/* CUSTOM OUTLET */}
-                {outlet === "Other" && (
-                  <>
-                    <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                      Custom Outlet Name
-                    </Text>
-                    <TextInput
-                      placeholder="Enter outlet name"
-                      placeholderTextColor={theme.subtext}
-                      value={customOutlet}
-                      onChangeText={setCustomOutlet}
-                      style={[
-                        styles.input,
-                        {
-                          color: theme.text,
-                          borderColor: theme.border,
-                          backgroundColor: theme.bg,
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-
-                {/* FEE */}
-                <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                  Delivery Fee (₹)
-                </Text>
-                <TextInput
-                  placeholder="How much will you pay?"
-                  placeholderTextColor={theme.subtext}
-                  value={fee}
-                  onChangeText={setFee}
-                  keyboardType="numeric"
-                  style={[
-                    styles.input,
-                    {
-                      color: theme.text,
-                      borderColor: theme.border,
-                      backgroundColor: theme.bg,
-                    },
-                  ]}
-                />
-              </Card>
-
-              {/* SUBMIT BUTTON */}
-              <Pressable
-                onPress={handleSubmit}
-                disabled={!isValid || loading}
-                style={[
-                  styles.submitButton,
-                  {
-                    backgroundColor: isValid && !loading ? theme.primary : theme.border,
-                    opacity: isValid && !loading ? 1 : 0.5,
-                  },
-                ]}
-              >
-                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-                  {loading ? "Creating..." : "Create Request"}
-                </Text>
-              </Pressable>
+                >
+                  <Ionicons
+                    name="search"
+                    size={20}
+                    color={mode === "availability" ? "#fff" : theme.text}
+                  />
+                  <Text
+                    style={[
+                      styles.modeButtonText,
+                      {
+                        color:
+                          mode === "availability" ? "#fff" : theme.text,
+                      },
+                    ]}
+                  >
+                    Availability
+                  </Text>
+                </Pressable>
+              </View>
             </View>
+
+            {/* DELIVERY MODE */}
+            {mode === "delivery" && (
+              <View style={styles.container}>
+                <Card>
+                  {/* ITEM */}
+                  <Text style={[styles.label, { color: theme.text }]}>
+                    Item Description
+                  </Text>
+                  <TextInput
+                    placeholder="What do you need?"
+                    placeholderTextColor={theme.subtext}
+                    value={deliveryItem}
+                    onChangeText={setDeliveryItem}
+                    style={[
+                      styles.input,
+                      {
+                        color: theme.text,
+                        borderColor: theme.border,
+                        backgroundColor: theme.bg,
+                      },
+                    ]}
+                  />
+
+                  {/* OUTLET SELECTION */}
+                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                    Outlet
+                  </Text>
+                  <TextInput
+                    value={outletSearch}
+                    onChangeText={(text) => {
+                      setOutletSearch(text);
+                      setShowOutletDropdown(true);
+                    }}
+                    onFocus={() => setShowOutletDropdown(true)}
+                    placeholder="Search outlets..."
+                    placeholderTextColor={theme.subtext}
+                    style={[
+                      styles.input,
+                      {
+                        color: theme.text,
+                        borderColor: theme.border,
+                        backgroundColor: theme.bg,
+                      },
+                    ]}
+                  />
+
+                  {deliveryOutlet && (
+                    <View style={[styles.selectedPill, { backgroundColor: theme.primary + "20" }]}>
+                      <Text style={{ color: theme.primary, fontWeight: "600" }}>
+                        ✓ {deliveryOutlet.name}
+                      </Text>
+                      <Pressable onPress={() => setDeliveryOutlet(null)}>
+                        <Text style={{ color: theme.primary, fontSize: 16 }}>×</Text>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {showOutletDropdown && filteredDeliveryOutlets.length > 0 && (
+                    <ScrollView
+                      style={[
+                        styles.dropdown,
+                        { backgroundColor: theme.bg, borderColor: theme.border },
+                      ]}
+                      scrollEnabled={filteredDeliveryOutlets.length > 4}
+                      nestedScrollEnabled
+                    >
+                      {filteredDeliveryOutlets.map((o) => (
+                        <Pressable
+                          key={o._id}
+                          onPress={() => {
+                            setDeliveryOutlet(o);
+                            setOutletSearch(o.name);
+                            setShowOutletDropdown(false);
+                          }}
+                          style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
+                        >
+                          <Text style={{ color: theme.text, fontWeight: "500" }}>
+                            {o.name}
+                          </Text>
+                          <Text style={[styles.outletDesc, { color: theme.subtext }]}>
+                            {o.locationDescription}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+
+                  {/* HOSTEL */}
+                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                    Hostel
+                  </Text>
+                  <View style={styles.row}>
+                    {["ANC 1", "ANC 2", "CP", "Other"].map((h) => (
+                      <Pressable
+                        key={h}
+                        onPress={() => setHostel(h)}
+                        style={[
+                          styles.chip,
+                          {
+                            backgroundColor:
+                              hostel === h ? theme.primary : theme.card,
+                            borderColor: theme.border,
+                            borderWidth: 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: hostel === h ? "#fff" : theme.text,
+                            fontWeight: "600",
+                            fontSize: 12,
+                          }}
+                        >
+                          {h}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  {/* FEE */}
+                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                    Delivery Fee (₹)
+                  </Text>
+                  <TextInput
+                    placeholder="How much will you pay?"
+                    placeholderTextColor={theme.subtext}
+                    value={fee}
+                    onChangeText={setFee}
+                    keyboardType="numeric"
+                    style={[
+                      styles.input,
+                      {
+                        color: theme.text,
+                        borderColor: theme.border,
+                        backgroundColor: theme.bg,
+                      },
+                    ]}
+                  />
+
+                  {/* SUBMIT BUTTON */}
+                  <Pressable
+                    onPress={handleDeliverySubmit}
+                    disabled={!deliveryValid || deliveryLoading}
+                    style={[
+                      styles.submitButton,
+                      {
+                        backgroundColor:
+                          deliveryValid && !deliveryLoading
+                            ? theme.primary
+                            : theme.border,
+                        opacity: deliveryValid && !deliveryLoading ? 1 : 0.5,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontWeight: "700",
+                        fontSize: 16,
+                        marginLeft: 8,
+                      }}
+                    >
+                      {deliveryLoading ? "Creating..." : "Create Delivery"}
+                    </Text>
+                  </Pressable>
+                </Card>
+              </View>
+            )}
+
+            {/* AVAILABILITY MODE */}
+            {mode === "availability" && (
+              <View style={styles.container}>
+                <Card>
+                  {/* ITEM */}
+                  <Text style={[styles.label, { color: theme.text }]}>
+                    Item Name
+                  </Text>
+                  <TextInput
+                    placeholder="What are you checking availability for?"
+                    placeholderTextColor={theme.subtext}
+                    value={availabilityItem}
+                    onChangeText={setAvailabilityItem}
+                    style={[
+                      styles.input,
+                      {
+                        color: theme.text,
+                        borderColor: theme.border,
+                        backgroundColor: theme.bg,
+                      },
+                    ]}
+                  />
+
+                  {/* OUTLET SELECTION */}
+                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                    Outlet
+                  </Text>
+                  <TextInput
+                    value={availOutletSearch}
+                    onChangeText={(text) => {
+                      setAvailOutletSearch(text);
+                      setShowAvailOutletDropdown(true);
+                    }}
+                    onFocus={() => setShowAvailOutletDropdown(true)}
+                    placeholder="Search outlets..."
+                    placeholderTextColor={theme.subtext}
+                    style={[
+                      styles.input,
+                      {
+                        color: theme.text,
+                        borderColor: theme.border,
+                        backgroundColor: theme.bg,
+                      },
+                    ]}
+                  />
+
+                  {availabilityOutlet && (
+                    <View style={[styles.selectedPill, { backgroundColor: theme.primary + "20" }]}>
+                      <Text style={{ color: theme.primary, fontWeight: "600" }}>
+                        ✓ {availabilityOutlet.name}
+                      </Text>
+                      <Pressable onPress={() => setAvailabilityOutlet(null)}>
+                        <Text style={{ color: theme.primary, fontSize: 16 }}>×</Text>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  {showAvailOutletDropdown && filteredAvailOutlets.length > 0 && (
+                    <ScrollView
+                      style={[
+                        styles.dropdown,
+                        { backgroundColor: theme.bg, borderColor: theme.border },
+                      ]}
+                      scrollEnabled={filteredAvailOutlets.length > 4}
+                      nestedScrollEnabled
+                    >
+                      {filteredAvailOutlets.map((o) => (
+                        <Pressable
+                          key={o._id}
+                          onPress={() => {
+                            setAvailabilityOutlet(o);
+                            setAvailOutletSearch(o.name);
+                            setShowAvailOutletDropdown(false);
+                          }}
+                          style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
+                        >
+                          <Text style={{ color: theme.text, fontWeight: "500" }}>
+                            {o.name}
+                          </Text>
+                          <Text style={[styles.outletDesc, { color: theme.subtext }]}>
+                            {o.locationDescription}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+
+                  {/* SUBMIT BUTTON */}
+                  <Pressable
+                    onPress={handleAvailabilitySubmit}
+                    disabled={!availabilityValid || availabilityLoading}
+                    style={[
+                      styles.submitButton,
+                      {
+                        backgroundColor:
+                          availabilityValid && !availabilityLoading
+                            ? theme.primary
+                            : theme.border,
+                        opacity: availabilityValid && !availabilityLoading ? 1 : 0.5,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontWeight: "700",
+                        fontSize: 16,
+                        marginLeft: 8,
+                      }}
+                    >
+                      {availabilityLoading ? "Creating..." : "Check Availability"}
+                    </Text>
+                  </Pressable>
+                </Card>
+              </View>
+            )}
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -223,16 +531,67 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
   },
-  label: {
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modeSelector: {
+    flexDirection: "row",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+    paddingHorizontal: 16,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 3,
+    gap: 8,
+  },
+  modeButtonText: {
     fontSize: 14,
+    fontWeight: "600",
+  },
+  label: {
+    fontSize: 13,
     fontWeight: "600",
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
     borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+  },
+  selectedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  dropdown: {
+    maxHeight: 200,
+    borderWidth: 1,
+    borderRadius: 8,
+    marginTop: 4,
+    paddingVertical: 4,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  outletDesc: {
+    fontSize: 10,
+    marginTop: 2,
   },
   row: {
     flexDirection: "row",
@@ -248,10 +607,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   submitButton: {
-    marginTop: 24,
-    paddingVertical: 14,
-    borderRadius: 10,
+    flexDirection: "row",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 16,
   },
 });

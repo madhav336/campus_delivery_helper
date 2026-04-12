@@ -160,6 +160,14 @@ export const availability = {
     return response.json();
   },
 
+  async getAll() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/availability?filter=all`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch all requests');
+    const data = await response.json();
+    return data.requests || [];
+  },
+
   async getOwn() {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/availability?filter=own`, { headers });

@@ -12,7 +12,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { requests } from "@/services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { requests, availability } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
@@ -26,50 +27,157 @@ interface DeliveryRequest {
   fee: number;
   status: string;
   requestedBy: string | { _id: string; name: string; phone?: string };
-  acceptedBy: string | { _id: string; name: string; phone?: string };
+  acceptedBy?: string | { _id: string; name: string; phone?: string };
   createdAt: string;
+  completedAt?: string;
+  delivererRating?: { rating?: number; feedback?: string };
+  requesterRating?: { rating?: number; feedback?: string };
+}
+
+interface AvailabilityRequest {
+  _id: string;
+  itemName: string;
+  outlet: string | { _id: string; name: string; locationDescription?: string };
+  requestedBy: string | { _id: string; name: string; phone?: string; email?: string };
+  status: string;
+  response?: {
+    available: boolean;
+    respondedBy?: any;
+    respondedAt?: string;
+  };
+  createdAt: string;
+  expiresAt: string;
 }
 
 export default function ActivityScreen() {
   const { theme } = useTheme();
-  const [mode, setMode] = useState<"requests" | "deliveries">("requests");
-  const [allRequests, setAllRequests] = useState<DeliveryRequest[]>([]);
+  const [mode, setMode] = useState<"deliveries" | "requests" | "availability">(
+    "deliveries"
+  );
+  const [allDeliveries, setAllDeliveries] = useState<DeliveryRequest[]>([]);
+  const [allAvailabilities, setAllAvailabilities] = useState<AvailabilityRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Edit/Delete states
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editItem, setEditItem] = useState("");
+  const [editOutlet, setEditOutlet] = useState("");
+
+  // Rating modal
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<DeliveryRequest | null>(null);
   const [rating, setRating] = useState("5");
   const [feedback, setFeedback] = useState("");
-  const [ratingType, setRatingType] = useState<"requester" | "deliverer" | null>(null);
+
+  useEffect(() => {
+    const loadUserId = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setCurrentUserId(user._id);
+        }
+      } catch (error) {
+        console.error("Failed to load user ID:", error);
+      }
+    };
+    loadUserId();
+  }, []);
 
   const loadData = useCallback(async () => {
+    if (!currentUserId) return;
     try {
       setLoading(true);
-      const ownRequests = await requests.getAll("own");
-      const inProgressRequests = await requests.getAll("inprogress");
-      const completedRequests = await requests.getAll("completed");
-      
-      // Combine all requests
-      setAllRequests([...ownRequests, ...inProgressRequests, ...completedRequests]);
+      const [ownRequests, ownAvailability] = await Promise.all([
+        requests.getAll("own"),
+        availability.getOwn(),
+      ]);
+      setAllDeliveries(ownRequests);
+      setAllAvailabilities(ownAvailability);
     } catch (error) {
       Alert.alert("Error", "Failed to load activity");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
-  useFocusEffect(useCallback(() => {
-    loadData();
-  }, [loadData]));
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const handleDeleteDelivery = (id: string) => {
+    Alert.alert("Delete Request", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await requests.delete(id);
+            Alert.alert("Success", "Deleted! ✅");
+            loadData();
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAvailability = (id: string) => {
+    Alert.alert("Delete Request", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await availability.delete(id);
+            Alert.alert("Success", "Deleted! ✅");
+            loadData();
+          } catch (error) {
+            Alert.alert("Error", "Failed to delete");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleCompleteDelivery = (id: string) => {
+    Alert.alert("Complete Delivery", "Mark as completed?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Complete",
+        onPress: async () => {
+          try {
+            await requests.complete(id);
+            Alert.alert("Success", "Marked as completed! ✅");
+            loadData();
+          } catch (error) {
+            Alert.alert("Error", "Failed to complete");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleRateDelivery = (req: DeliveryRequest) => {
+    setSelectedRequest(req);
+    setRating("5");
+    setFeedback("");
+    setRatingModalVisible(true);
+  };
 
   const handleSubmitRating = async () => {
-    if (!selectedRequest || !ratingType) return;
-
+    if (!selectedRequest) return;
     try {
+      // Call rating API
       await requests.rate(selectedRequest._id, Number(rating), feedback);
       Alert.alert("Success", "Rating submitted! ✅");
       setRatingModalVisible(false);
-      setRating("5");
-      setFeedback("");
       loadData();
     } catch (error) {
       Alert.alert("Error", "Failed to submit rating");
@@ -87,209 +195,512 @@ export default function ActivityScreen() {
     );
   }
 
-  // REQUESTS MODE
-  if (mode === "requests") {
-    const pendingRequests = allRequests.filter((r) => r.status === "OPEN" && r.requestedBy);
-    const completedRequests = allRequests.filter((r) => r.status === "COMPLETED" && r.requestedBy);
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+      <TopBar title="My Activity" />
 
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <TopBar title="My Requests" />
-        
-        {/* MODE TABS */}
-        <View style={[styles.modeTabsContainer, { backgroundColor: theme.bg, borderBottomColor: theme.border }]}>
+      {/* MODE SELECTOR */}
+      <View style={[styles.modeSelector, { backgroundColor: theme.card }]}>
+        {["deliveries", "requests", "availability"].map((m) => (
           <Pressable
-            onPress={() => setMode("requests")}
-            style={[styles.modeTab, { borderBottomColor: mode === "requests" ? theme.primary : "transparent" }]}
+            key={m}
+            onPress={() => setMode(m as any)}
+            style={[
+              styles.modeTab,
+              {
+                borderBottomColor: mode === m ? theme.primary : "transparent",
+                borderBottomWidth: mode === m ? 3 : 0,
+              },
+            ]}
           >
-            <Ionicons name="document-text" size={18} color={mode === "requests" ? theme.primary : theme.subtext} />
-            <Text style={[styles.modeTabText, { color: mode === "requests" ? theme.primary : theme.subtext, fontWeight: mode === "requests" ? "600" : "400" }]}>
-              Requests
+            <Text
+              style={[
+                styles.modeTabText,
+                {
+                  color: mode === m ? theme.primary : theme.subtext,
+                  fontWeight: mode === m ? "700" : "500",
+                },
+              ]}
+            >
+              {m === "deliveries"
+                ? "Deliveries"
+                : m === "requests"
+                ? "Requests"
+                : "Availability"}
             </Text>
           </Pressable>
-          <Pressable
-            onPress={() => setMode("deliveries")}
-            style={[styles.modeTab, { borderBottomColor: mode === "deliveries" ? theme.primary : "transparent" }]}
-          >
-            <Ionicons name="car" size={18} color={mode === "deliveries" ? theme.primary : theme.subtext} />
-            <Text style={[styles.modeTabText, { color: mode === "deliveries" ? theme.primary : theme.subtext, fontWeight: mode === "deliveries" ? "600" : "400" }]}>
-              Deliveries
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+        {/* DELIVERIES MODE */}
+        {mode === "deliveries" && (
+          <>
+            <Text style={[styles.modeTitle, { color: theme.text, marginBottom: 12 }]}>
+              Your Deliveries
             </Text>
-          </Pressable>
+            {allDeliveries.filter((d) => d.status === "IN_PROGRESS").length ===
+              0 ? (
+              <Card>
+                <Text
+                  style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
+                >
+                  No active deliveries
+                </Text>
+              </Card>
+            ) : (
+              allDeliveries
+                .filter((d) => d.status === "IN_PROGRESS")
+                .map((delivery) => (
+                  <Card key={delivery._id}>
+                    <View style={styles.header}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.item, { color: theme.text }]}>
+                          {delivery.itemDescription}
+                        </Text>
+                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                          {typeof delivery.outlet === "object"
+                            ? delivery.outlet?.name
+                            : delivery.outlet}{" "}
+                          → {delivery.hostel}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feeBadge,
+                          { backgroundColor: theme.primary + "20" },
+                        ]}
+                      >
+                        <Text style={[styles.fee, { color: theme.primary }]}>
+                          ₹{delivery.fee}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Pressable
+                      onPress={() => handleCompleteDelivery(delivery._id)}
+                      style={[
+                        styles.button,
+                        { backgroundColor: theme.primary, marginTop: 12 },
+                      ]}
+                    >
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "600",
+                          marginLeft: 8,
+                        }}
+                      >
+                        Mark Complete
+                      </Text>
+                    </Pressable>
+                  </Card>
+                ))
+            )}
+
+            <Text
+              style={[styles.modeTitle, { color: theme.text, marginBottom: 12, marginTop: 20 }]}
+            >
+              Completed Deliveries
+            </Text>
+            {allDeliveries.filter((d) => d.status === "COMPLETED").length ===
+              0 ? (
+              <Card>
+                <Text
+                  style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
+                >
+                  No completed deliveries
+                </Text>
+              </Card>
+            ) : (
+              allDeliveries
+                .filter((d) => d.status === "COMPLETED")
+                .map((delivery) => (
+                  <Card key={delivery._id}>
+                    <View style={styles.header}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.item, { color: theme.text }]}>
+                          {delivery.itemDescription}
+                        </Text>
+                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                          {typeof delivery.outlet === "object"
+                            ? delivery.outlet?.name
+                            : delivery.outlet}{" "}
+                          → {delivery.hostel}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feeBadge,
+                          { backgroundColor: "#10b98120" },
+                        ]}
+                      >
+                        <Text style={[styles.fee, { color: "#10b981" }]}>
+                          ✓ Done
+                        </Text>
+                      </View>
+                    </View>
+
+                    {!delivery.delivererRating ||
+                    !delivery.delivererRating?.rating ? (
+                      <Pressable
+                        onPress={() => handleRateDelivery(delivery)}
+                        style={[
+                          styles.button,
+                          { backgroundColor: theme.primary, marginTop: 12 },
+                        ]}
+                      >
+                        <Ionicons name="star" size={16} color="#fff" />
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "600",
+                            marginLeft: 8,
+                          }}
+                        >
+                          Rate Deliverer
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.subtext,
+                          { color: theme.subtext, marginTop: 8 },
+                        ]}
+                      >
+                        ⭐ Rated {delivery.delivererRating.rating}/5
+                      </Text>
+                    )}
+                  </Card>
+                ))
+            )}
+          </>
+        )}
+
+        {/* REQUESTS MODE */}
+        {mode === "requests" && (
+          <>
+            <Text style={[styles.modeTitle, { color: theme.text, marginBottom: 12 }]}>
+              Pending Requests
+            </Text>
+            {allDeliveries.filter((r) => r.status === "OPEN").length === 0 ? (
+              <Card>
+                <Text
+                  style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
+                >
+                  No pending requests
+                </Text>
+              </Card>
+            ) : (
+              allDeliveries
+                .filter((r) => r.status === "OPEN")
+                .map((request) => (
+                  <Card key={request._id}>
+                    <View style={styles.header}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.item, { color: theme.text }]}>
+                          {request.itemDescription}
+                        </Text>
+                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                          {typeof request.outlet === "object"
+                            ? request.outlet?.name
+                            : request.outlet}{" "}
+                          → {request.hostel}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feeBadge,
+                          { backgroundColor: theme.primary + "20" },
+                        ]}
+                      >
+                        <Text style={[styles.fee, { color: theme.primary }]}>
+                          ₹{request.fee}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.actions}>
+                      <Pressable
+                        onPress={() => {
+                          setEditingId(request._id);
+                          setEditItem(request.itemDescription);
+                          setEditOutlet(
+                            typeof request.outlet === "object"
+                              ? request.outlet?.name
+                              : request.outlet
+                          );
+                        }}
+                        style={[
+                          styles.smallButton,
+                          { backgroundColor: theme.primary },
+                        ]}
+                      >
+                        <Ionicons name="pencil" size={16} color="#fff" />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDeleteDelivery(request._id)}
+                        style={[styles.smallButton, { backgroundColor: "#ef4444" }]}
+                      >
+                        <Ionicons name="trash" size={16} color="#fff" />
+                      </Pressable>
+                    </View>
+                  </Card>
+                ))
+            )}
+
+            <Text
+              style={[
+                styles.modeTitle,
+                { color: theme.text, marginBottom: 12, marginTop: 20 },
+              ]}
+            >
+              Accepted Requests
+            </Text>
+            {allDeliveries.filter((r) => r.status === "IN_PROGRESS").length ===
+              0 ? (
+              <Card>
+                <Text
+                  style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
+                >
+                  No accepted requests
+                </Text>
+              </Card>
+            ) : (
+              allDeliveries
+                .filter((r) => r.status === "IN_PROGRESS")
+                .map((request) => (
+                  <Card key={request._id}>
+                    <View style={styles.header}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.item, { color: theme.text }]}>
+                          {request.itemDescription}
+                        </Text>
+                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                          By{" "}
+                          {typeof request.acceptedBy === "object"
+                            ? request.acceptedBy?.name
+                            : "User"}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feeBadge,
+                          { backgroundColor: "#f59e0b20" },
+                        ]}
+                      >
+                        <Text style={[styles.fee, { color: "#f59e0b" }]}>
+                          In Progress
+                        </Text>
+                      </View>
+                    </View>
+                  </Card>
+                ))
+            )}
+          </>
+        )}
+
+        {/* AVAILABILITY MODE */}
+        {mode === "availability" && (
+          <>
+            <Text style={[styles.modeTitle, { color: theme.text, marginBottom: 12 }]}>
+              Pending Checks
+            </Text>
+            {allAvailabilities.filter((a) => a.status === "PENDING").length ===
+              0 ? (
+              <Card>
+                <Text
+                  style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
+                >
+                  No pending availability checks
+                </Text>
+              </Card>
+            ) : (
+              allAvailabilities
+                .filter((a) => a.status === "PENDING")
+                .map((avail) => (
+                  <Card key={avail._id}>
+                    <View style={styles.header}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.item, { color: theme.text }]}>
+                          {avail.itemName}
+                        </Text>
+                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                          {typeof avail.outlet === "object"
+                            ? avail.outlet?.name
+                            : avail.outlet}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feeBadge,
+                          { backgroundColor: theme.primary + "20" },
+                        ]}
+                      >
+                        <Text style={[styles.fee, { color: theme.primary }]}>
+                          ⏳ Pending
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.actions}>
+                      <Pressable
+                        onPress={() => handleDeleteAvailability(avail._id)}
+                        style={[styles.smallButton, { backgroundColor: "#ef4444" }]}
+                      >
+                        <Ionicons name="trash" size={16} color="#fff" />
+                      </Pressable>
+                    </View>
+                  </Card>
+                ))
+            )}
+
+            <Text
+              style={[
+                styles.modeTitle,
+                { color: theme.text, marginBottom: 12, marginTop: 20 },
+              ]}
+            >
+              Responded Checks
+            </Text>
+            {allAvailabilities.filter((a) => a.status === "CONFIRMED").length ===
+              0 ? (
+              <Card>
+                <Text
+                  style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
+                >
+                  No responded checks
+                </Text>
+              </Card>
+            ) : (
+              allAvailabilities
+                .filter((a) => a.status === "CONFIRMED")
+                .map((avail) => (
+                  <Card key={avail._id}>
+                    <View style={styles.header}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.item, { color: theme.text }]}>
+                          {avail.itemName}
+                        </Text>
+                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                          {typeof avail.outlet === "object"
+                            ? avail.outlet?.name
+                            : avail.outlet}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.feeBadge,
+                          {
+                            backgroundColor: avail.response?.available
+                              ? "#10b98120"
+                              : "#ef444420",
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.fee,
+                            {
+                              color: avail.response?.available
+                                ? "#10b981"
+                                : "#ef4444",
+                            },
+                          ]}
+                        >
+                          {avail.response?.available ? "✓ Yes" : "✗ No"}
+                        </Text>
+                      </View>
+                    </View>
+                  </Card>
+                ))
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* RATING MODAL */}
+      <Modal visible={ratingModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <Card>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
+              Rate Deliverer
+            </Text>
+            <Text
+              style={[styles.label, { color: theme.text, marginTop: 12 }]}
+            >
+              Rating
+            </Text>
+            <View style={styles.ratingRow}>
+              {[1, 2, 3, 4, 5].map((r) => (
+                <Pressable key={r} onPress={() => setRating(String(r))}>
+                  <Text
+                    style={[
+                      styles.ratingButton,
+                      {
+                        color: Number(rating) >= r ? "#fbbf24" : theme.border,
+                        fontSize: 28,
+                      },
+                    ]}
+                  >
+                    ★
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text
+              style={[styles.label, { color: theme.text, marginTop: 12 }]}
+            >
+              Feedback (Optional)
+            </Text>
+            <TextInput
+              value={feedback}
+              onChangeText={setFeedback}
+              placeholder="Share your experience..."
+              placeholderTextColor={theme.subtext}
+              multiline
+              style={[
+                styles.input,
+                {
+                  color: theme.text,
+                  borderColor: theme.border,
+                  backgroundColor: theme.bg,
+                  minHeight: 80,
+                  textAlignVertical: "top",
+                },
+              ]}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => setRatingModalVisible(false)}
+                style={[
+                  styles.modalBtn,
+                  {
+                    backgroundColor: theme.bg,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text style={{ color: theme.text, fontWeight: "600" }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSubmitRating}
+                style={[styles.modalBtn, { backgroundColor: theme.primary }]}
+              >
+                <Text style={{ color: "#fff", fontWeight: "600" }}>Submit</Text>
+              </Pressable>
+            </View>
+          </Card>
         </View>
-
-        <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
-          {/* PENDING REQUESTS SECTION */}
-          <Card>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Pending Requests ({pendingRequests.length})
-            </Text>
-            {pendingRequests.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.subtext }]}>
-                No pending requests
-              </Text>
-            ) : (
-              pendingRequests.map((req) => (
-                <View key={req._id} style={[styles.requestCard, { borderColor: theme.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: theme.text }]}>
-                      {req.itemDescription}
-                    </Text>
-                    <Text style={[styles.details, { color: theme.subtext }]}>
-                      {typeof req.outlet === 'object' ? req.outlet?.name : req.outlet} → {req.hostel}
-                    </Text>
-                    <Text style={[styles.fee, { color: theme.primary, marginTop: 6 }]}>
-                      ₹{req.fee}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: "#fbbf2420" }]}>
-                    <Text style={{ fontSize: 10, fontWeight: "600", color: "#f59e0b" }}>
-                      ⏳ Open
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </Card>
-
-          {/* COMPLETED REQUESTS SECTION */}
-          <Card>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Completed Requests ({completedRequests.length})
-            </Text>
-            {completedRequests.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.subtext }]}>
-                No completed requests
-              </Text>
-            ) : (
-              completedRequests.map((req) => (
-                <View key={req._id} style={[styles.requestCard, { borderColor: theme.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: theme.text }]}>
-                      {req.itemDescription}
-                    </Text>
-                    <Text style={[styles.details, { color: theme.subtext }]}>
-                      {typeof req.outlet === 'object' ? req.outlet?.name : req.outlet} → {req.hostel}
-                    </Text>
-                    <Text style={[styles.fee, { color: theme.primary, marginTop: 6 }]}>
-                      ₹{req.fee}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: "#d1fae520" }]}>
-                    <Text style={{ fontSize: 10, fontWeight: "600", color: "#10b981" }}>
-                      ✓ Done
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </Card>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // DELIVERIES MODE
-  else {
-    const ongoingDeliveries = allRequests.filter((r) => r.status === "IN_PROGRESS" && r.acceptedBy);
-    const completedDeliveries = allRequests.filter((r) => r.status === "COMPLETED" && r.acceptedBy);
-
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <TopBar title="My Deliveries" />
-        
-        {/* MODE TABS */}
-        <View style={[styles.modeTabsContainer, { backgroundColor: theme.bg, borderBottomColor: theme.border }]}>
-          <Pressable
-            onPress={() => setMode("requests")}
-            style={[styles.modeTab, { borderBottomColor: mode === "requests" ? theme.primary : "transparent" }]}
-          >
-            <Ionicons name="document-text" size={18} color={mode === "requests" ? theme.primary : theme.subtext} />
-            <Text style={[styles.modeTabText, { color: mode === "requests" ? theme.primary : theme.subtext, fontWeight: mode === "requests" ? "600" : "400" }]}>
-              Requests
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setMode("deliveries")}
-            style={[styles.modeTab, { borderBottomColor: mode === "deliveries" ? theme.primary : "transparent" }]}
-          >
-            <Ionicons name="car" size={18} color={mode === "deliveries" ? theme.primary : theme.subtext} />
-            <Text style={[styles.modeTabText, { color: mode === "deliveries" ? theme.primary : theme.subtext, fontWeight: mode === "deliveries" ? "600" : "400" }]}>
-              Deliveries
-            </Text>
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
-          {/* ONGOING DELIVERIES SECTION */}
-          <Card>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Ongoing Deliveries ({ongoingDeliveries.length})
-            </Text>
-            {ongoingDeliveries.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.subtext }]}>
-                No ongoing deliveries
-              </Text>
-            ) : (
-              ongoingDeliveries.map((req) => (
-                <View key={req._id} style={[styles.requestCard, { borderColor: theme.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: theme.text }]}>
-                      {req.itemDescription}
-                    </Text>
-                    <Text style={[styles.details, { color: theme.subtext }]}>
-                      {typeof req.outlet === 'object' ? req.outlet?.name : req.outlet} → {req.hostel}
-                    </Text>
-                    <Text style={[styles.fee, { color: theme.primary, marginTop: 6 }]}>
-                      ₹{req.fee}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: "#bfdbfe20" }]}>
-                    <Text style={{ fontSize: 10, fontWeight: "600", color: "#3b82f6" }}>
-                      ↗ Ongoing
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </Card>
-
-          {/* COMPLETED DELIVERIES SECTION */}
-          <Card>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Completed Deliveries ({completedDeliveries.length})
-            </Text>
-            {completedDeliveries.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.subtext }]}>
-                No completed deliveries
-              </Text>
-            ) : (
-              completedDeliveries.map((req) => (
-                <View key={req._id} style={[styles.requestCard, { borderColor: theme.border }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: theme.text }]}>
-                      {req.itemDescription}
-                    </Text>
-                    <Text style={[styles.details, { color: theme.subtext }]}>
-                      {typeof req.outlet === 'object' ? req.outlet?.name : req.outlet} → {req.hostel}
-                    </Text>
-                    <Text style={[styles.fee, { color: theme.primary, marginTop: 6 }]}>
-                      ₹{req.fee}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: "#d1fae520" }]}>
-                    <Text style={{ fontSize: 10, fontWeight: "600", color: "#10b981" }}>
-                      ✓ Done
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </Card>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
+      </Modal>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -301,72 +712,111 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  modeTabsContainer: {
+  modeSelector: {
     flexDirection: "row",
-    borderBottomWidth: 1,
     paddingHorizontal: 16,
+    gap: 8,
+    paddingVertical: 8,
   },
   modeTab: {
     flex: 1,
-    flexDirection: "row",
+    paddingVertical: 10,
     alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    paddingHorizontal: 8,
   },
   modeTabText: {
-    fontSize: 13,
+    fontSize: 12,
   },
-  sectionTitle: {
-    fontSize: 15,
+  modeTitle: {
+    fontSize: 14,
     fontWeight: "700",
-    marginBottom: 12,
+    marginTop: 8,
   },
-  requestCard: {
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 0,
-    borderBottomWidth: 1,
-    marginBottom: 0,
+    alignItems: "flex-start",
+    marginBottom: 10,
   },
-  itemName: {
+  item: {
     fontSize: 14,
     fontWeight: "600",
   },
-  details: {
+  subtext: {
     fontSize: 12,
     marginTop: 4,
   },
-  fee: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
+  feeBadge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 6,
+  },
+  fee: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  button: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smallButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
   },
   emptyText: {
-    textAlign: "center",
     paddingVertical: 20,
     fontSize: 13,
   },
-  ratingText: {
-    fontSize: 12,
-    marginTop: 4,
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
   },
-  ratingButtons: {
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  ratingRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginVertical: 12,
+  },
+  ratingButton: {
+    alignItems: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  modalButtons: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 12,
+    marginTop: 16,
   },
-  ratingBtn: {
+  modalBtn: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 6,
     alignItems: "center",
   },
