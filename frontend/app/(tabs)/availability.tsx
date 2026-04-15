@@ -2,768 +2,371 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   Pressable,
   TextInput,
-  Keyboard,
-  TouchableWithoutFeedback,
-  SectionList,
-  FlatList,
+  ActivityIndicator,
   Alert,
-  ScrollView,
   Modal,
-  KeyboardAvoidingView,
-  Platform,
+  FlatList,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "@/context/ThemeContext";
-import {
-  getAvailability,
-  createAvailability,
-  respondAvailability,
-  getOutlets,
-  deleteAvailability,
-  updateAvailability,
-} from "@/services/api";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
-import Card from "@/components/ui/Card";
+import { availability, outlets } from "@/services/api";
+import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
+import Card from "@/components/ui/Card";
+import { Ionicons } from "@expo/vector-icons";
 
-type AvailabilityRequest = {
+interface AvailabilityRequest {
   _id: string;
-  requestedBy: string;
-  item: string;
-  outlet: string;
-  status: "PENDING" | "AVAILABLE" | "NOT_AVAILABLE";
-};
+  itemName: string;
+  outlet: string | { _id: string; name: string; locationDescription?: string };
+  requestedBy: string | { _id: string; name: string; phone?: string; email?: string };
+  status: string;
+  response?: {
+    available: boolean;
+    respondedBy?: any;
+    respondedAt?: string;
+  };
+  createdAt: string;
+  expiresAt: string;
+}
 
-type Outlet = {
+interface Outlet {
   _id: string;
   name: string;
   locationDescription: string;
-};
+}
 
 export default function AvailabilityScreen() {
-  const { theme, mode } = useTheme();
+  const { theme, userRole } = useTheme();
 
-  const [item, setItem] = useState("");
-  const [outletSearch, setOutletSearch] = useState("");
-  const [selectedOutlet, setSelectedOutlet] = useState<string | null>(null);
-  const [outlets, setOutlets] = useState<Outlet[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [requests, setRequests] = useState<AvailabilityRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [allRequests, setAllRequests] = useState<AvailabilityRequest[]>([]);
+  const [outletsList, setOutletsList] = useState<Outlet[]>([]);
+  const [filterOutlet, setFilterOutlet] = useState<string | null>(null);
 
-  // Edit Modal State
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editItem, setEditItem] = useState("");
-  const [editOutletSearch, setEditOutletSearch] = useState("");
-  const [editSelectedOutlet, setEditSelectedOutlet] = useState<string | null>(null);
-  const [editShowDropdown, setEditShowDropdown] = useState(false);
-
-  const HARDCODED_USER_ID = "65f1a3b8c2d3e4f5a6b7c8d9";
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [availData, outletData] = await Promise.all([
-        getAvailability(),
-        getOutlets(),
-      ]);
-      setRequests(availData);
-      setOutlets(outletData);
-    } catch {
-      console.error("Failed to load data");
+      
+      // Outlet owners get their outlet's requests; students get all public confirmed
+      let availData;
+      if (userRole === "outlet_owner") {
+        availData = await availability.getPending();
+      } else {
+        availData = await availability.getAll();
+      }
+      setAllRequests(availData || []);
+      
+      // Load outlets
+      try {
+        const outletData = await outlets.getAll();
+        setOutletsList(outletData || []);
+      } catch (err) {
+        console.warn("Failed to load outlets");
+        setOutletsList([]);
+      }
+    } catch (error) {
+      console.error("Load error:", error);
+      setAllRequests([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userRole]);
 
-  useFocusEffect(useCallback(() => { loadData(); }, []));
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
 
-  const filteredOutlets = outlets.filter((o) =>
-    o.name.toLowerCase().includes(outletSearch.toLowerCase())
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
   );
 
-  const filteredEditOutlets = outlets.filter((o) =>
-    o.name.toLowerCase().includes(editOutletSearch.toLowerCase())
-  );
+  // Filter requests - only CONFIRMED and non-expired
+  const now = new Date();
+  const filtered = allRequests
+    .filter((req) => req.status === "CONFIRMED" && new Date(req.expiresAt) > now)
+    .filter((req) => {
+      if (filterOutlet) {
+        const outletName = typeof req.outlet === "object" ? req.outlet.name : req.outlet;
+        if (outletName !== filterOutlet) return false;
+      }
+      return true;
+    });
 
-  const handleCreate = async () => {
-    if (!item.trim() || !selectedOutlet) {
-      Alert.alert("Validation Error", "Please enter item and select an outlet");
-      return;
-    }
-
-    try {
-      await createAvailability({
-        userId: HARDCODED_USER_ID,
-        outlet: selectedOutlet,
-        item,
-      });
-      setItem("");
-      setOutletSearch("");
-      setSelectedOutlet(null);
-      setShowDropdown(false);
-      Alert.alert("Success", "Availability request created! ✅");
-      await loadData();
-    } catch (error) {
-      Alert.alert("Error", "Failed to create request");
-      console.error("Failed to create request", error);
-    }
-  };
-
-  const handleUpdateAvailability = async (id: string) => {
-    if (!editItem.trim() || !editSelectedOutlet) {
-      Alert.alert("Validation Error", "Please enter item and outlet");
-      return;
-    }
-
-    try {
-      await updateAvailability(id, { item: editItem, outlet: editSelectedOutlet });
-      setEditingId(null);
-      Alert.alert("Success", "Updated! ✅");
-      await loadData();
-    } catch (error) {
-      Alert.alert("Error", "Failed to update");
-      console.error("Failed to update", error);
-    }
-  };
-
-  const handleDeleteAvailability = async (id: string) => {
-    Alert.alert("Delete", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteAvailability(id);
-            Alert.alert("Success", "Deleted! ✅");
-            await loadData();
-          } catch (error) {
-            Alert.alert("Error", "Failed to delete");
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleEditStart = (avail: AvailabilityRequest) => {
-    setEditingId(avail._id);
-    setEditItem(avail.item);
-    setEditSelectedOutlet(avail.outlet);
-    setEditOutletSearch(avail.outlet);
-  };
-
-  const handleEditCancel = () => {
-    setEditingId(null);
-    setEditItem("");
-    setEditOutletSearch("");
-    setEditSelectedOutlet(null);
-    setEditShowDropdown(false);
-  };
-
-  const handleRespond = async (
-    id: string,
-    status: "AVAILABLE" | "NOT_AVAILABLE"
-  ) => {
-    try {
-      await respondAvailability(id, status);
-      await loadData();
-    } catch (error) {
-      console.error("Failed to respond:", error);
-    }
-  };
-
-  // ===== STUDENT MODE =====
-  if (mode === "STUDENT") {
+  if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <View style={{ flex: 1 }}>
-          {/* FIXED HEADER */}
-          <View style={[styles.headerContainer, { borderBottomColor: theme.border }]}>
-            <Card>
-              <Text style={[styles.title, { color: theme.text }]}>
-                Request Availability
-              </Text>
-
-              {/* OUTLET SEARCH */}
-              <Text style={[styles.label, { color: theme.text }]}>
-                Select Outlet
-              </Text>
-              <TextInput
-                placeholder="Search outlets..."
-                placeholderTextColor={theme.subtext}
-                value={outletSearch}
-                onChangeText={(text) => {
-                  setOutletSearch(text);
-                  setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                style={[
-                  styles.searchInput,
-                  {
-                    borderColor: theme.border,
-                    color: theme.text,
-                    backgroundColor: theme.bg,
-                  },
-                ]}
-              />
-
-              {selectedOutlet && (
-                <View
-                  style={[
-                    styles.selectedPill,
-                    {
-                      backgroundColor: theme.primary + "20",
-                      borderColor: theme.primary,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: theme.primary, fontWeight: "600" }}>
-                    ✓ {selectedOutlet}
-                  </Text>
-                  <Pressable
-                    onPress={() => {
-                      setSelectedOutlet(null);
-                      setOutletSearch("");
-                    }}
-                  >
-                    <Text style={{ color: theme.primary, fontSize: 18 }}>×</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {/* DROPDOWN */}
-              {showDropdown && filteredOutlets.length > 0 && (
-                <ScrollView
-                  style={[
-                    styles.dropdown,
-                    { backgroundColor: theme.bg, borderColor: theme.border },
-                  ]}
-                  scrollEnabled={filteredOutlets.length > 4}
-                  nestedScrollEnabled
-                >
-                  {filteredOutlets.map((outlet) => (
-                    <Pressable
-                      key={outlet._id}
-                      onPress={() => {
-                        setSelectedOutlet(outlet.name);
-                        setOutletSearch(outlet.name);
-                        setShowDropdown(false);
-                      }}
-                      style={[
-                        styles.dropdownItem,
-                        { borderBottomColor: theme.border },
-                      ]}
-                    >
-                      <Text style={{ color: theme.text, fontWeight: "500" }}>
-                        {outlet.name}
-                      </Text>
-                      <Text style={{ color: theme.subtext, fontSize: 12 }}>
-                        {outlet.locationDescription}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
-
-              {/* ITEM INPUT */}
-              <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                Item Name
-              </Text>
-              <TextInput
-                placeholder="Enter item"
-                placeholderTextColor={theme.subtext}
-                value={item}
-                onChangeText={setItem}
-                style={[
-                  styles.input,
-                  {
-                    borderColor: theme.border,
-                    color: theme.text,
-                    backgroundColor: theme.bg,
-                  },
-                ]}
-              />
-
-              <Pressable
-                onPress={handleCreate}
-                style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-              >
-                <Text style={styles.primaryText}>Request Availability</Text>
-              </Pressable>
-            </Card>
-          </View>
-
-          {/* SCROLLABLE LIST */}
-          <FlatList
-            data={requests}
-            keyExtractor={(item: AvailabilityRequest) => item._id}
-            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-            renderItem={({ item }: { item: AvailabilityRequest }) => (
-              <Card>
-                <View style={styles.requestHeader}>
-                  <View>
-                    <Text
-                      style={{
-                        color: theme.text,
-                        fontWeight: "600",
-                        fontSize: 16,
-                      }}
-                    >
-                      {item.item}
-                    </Text>
-                    <Text style={{ color: theme.subtext, marginTop: 4 }}>
-                      {item.outlet}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.badge,
-                      {
-                        color:
-                          item.status === "AVAILABLE"
-                            ? "#10b981"
-                            : item.status === "NOT_AVAILABLE"
-                              ? "#ef4444"
-                              : "#f59e0b",
-                      },
-                    ]}
-                  >
-                    {item.status}
-                  </Text>
-                </View>
-
-                <View style={styles.actionRow}>
-                  {item.status === "PENDING" && (
-                    <Pressable
-                      onPress={() => handleEditStart(item)}
-                      style={[styles.smallBtn, { backgroundColor: theme.primary }]}
-                    >
-                      <Text style={styles.btnText}>Edit</Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    onPress={() => handleDeleteAvailability(item._id)}
-                    style={[styles.smallBtn, { backgroundColor: "#ef4444" }]}
-                  >
-                    <Text style={styles.btnText}>Delete</Text>
-                  </Pressable>
-                </View>
-              </Card>
-            )}
-          />
+        <TopBar title="Availability Board" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
         </View>
-
-        {/* EDIT MODAL */}
-        <Modal
-          visible={editingId !== null}
-          transparent
-          animationType="slide"
-          onRequestClose={handleEditCancel}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ flex: 1 }}
-          >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-                <View style={{ flex: 1, padding: 16 }}>
-                  <Text style={[styles.modalTitle, { color: theme.text }]}>
-                    Edit Availability
-                  </Text>
-
-                  <ScrollView style={{ flex: 1, marginBottom: 16 }}>
-                    <Card>
-                      {/* ITEM */}
-                      <Text style={[styles.label, { color: theme.text }]}>
-                        Item
-                      </Text>
-                      <TextInput
-                        value={editItem}
-                        onChangeText={setEditItem}
-                        placeholderTextColor={theme.subtext}
-                        style={[
-                          styles.input,
-                          {
-                            borderColor: theme.border,
-                            color: theme.text,
-                            backgroundColor: theme.bg,
-                          },
-                        ]}
-                      />
-
-                      {/* OUTLET SEARCH */}
-                      <Text style={[styles.label, { color: theme.text }]}>
-                        Select Outlet
-                      </Text>
-                      <TextInput
-                        placeholder="Search outlets..."
-                        placeholderTextColor={theme.subtext}
-                        value={editOutletSearch}
-                        onChangeText={(text) => {
-                          setEditOutletSearch(text);
-                          setEditShowDropdown(true);
-                        }}
-                        onFocus={() => setEditShowDropdown(true)}
-                        style={[
-                          styles.searchInput,
-                          {
-                            borderColor: theme.border,
-                            color: theme.text,
-                            backgroundColor: theme.bg,
-                          },
-                        ]}
-                      />
-
-                      {editSelectedOutlet && (
-                        <View
-                          style={[
-                            styles.selectedPill,
-                            {
-                              backgroundColor: theme.primary + "20",
-                              borderColor: theme.primary,
-                            },
-                          ]}
-                        >
-                          <Text style={{ color: theme.primary, fontWeight: "600" }}>
-                            ✓ {editSelectedOutlet}
-                          </Text>
-                          <Pressable
-                            onPress={() => {
-                              setEditSelectedOutlet(null);
-                              setEditOutletSearch("");
-                            }}
-                          >
-                            <Text style={{ color: theme.primary, fontSize: 18 }}>
-                              ×
-                            </Text>
-                          </Pressable>
-                        </View>
-                      )}
-
-                      {/* DROPDOWN */}
-                      {editShowDropdown && filteredEditOutlets.length > 0 && (
-                        <ScrollView
-                          style={[
-                            styles.dropdown,
-                            {
-                              backgroundColor: theme.bg,
-                              borderColor: theme.border,
-                            },
-                          ]}
-                          scrollEnabled={filteredEditOutlets.length > 4}
-                          nestedScrollEnabled
-                        >
-                          {filteredEditOutlets.map((outlet) => (
-                            <Pressable
-                              key={outlet._id}
-                              onPress={() => {
-                                setEditSelectedOutlet(outlet.name);
-                                setEditOutletSearch(outlet.name);
-                                setEditShowDropdown(false);
-                              }}
-                              style={[
-                                styles.dropdownItem,
-                                { borderBottomColor: theme.border },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  color: theme.text,
-                                  fontWeight: "500",
-                                }}
-                              >
-                                {outlet.name}
-                              </Text>
-                              <Text
-                                style={{
-                                  color: theme.subtext,
-                                  fontSize: 12,
-                                }}
-                              >
-                                {outlet.locationDescription}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </ScrollView>
-                      )}
-                    </Card>
-                  </ScrollView>
-
-                  {/* BUTTONS */}
-                  <View style={styles.modalButtonRow}>
-                    <Pressable
-                      onPress={() => handleUpdateAvailability(editingId!)}
-                      style={[
-                        styles.modalBtn,
-                        { backgroundColor: theme.primary },
-                      ]}
-                    >
-                      <Text style={styles.btnText}>Save</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleEditCancel}
-                      style={[
-                        styles.modalBtn,
-                        { backgroundColor: theme.subtext },
-                      ]}
-                    >
-                      <Text style={styles.btnText}>Cancel</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </SafeAreaView>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        </Modal>
       </SafeAreaView>
     );
   }
 
-  // ===== OUTLET MODE =====
-  const sections = [
-    {
-      title: "PENDING REQUESTS",
-      data: requests.filter((r) => r.status === "PENDING"),
-    },
-  ];
+  // ===== OUTLET OWNER VIEW =====
+  if (userRole === "outlet_owner") {
+    // Filter by status and exclude expired requests
+    const now = new Date();
+    const pendingRequests = allRequests.filter(
+      (r) => r.status === "PENDING" && new Date(r.expiresAt) > now
+    );
+    const historyRequests = allRequests.filter(
+      (r) => r.status === "CONFIRMED" && new Date(r.expiresAt) > now
+    );
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      <View style={{ flex: 1 }}>
+    const handleRespond = async (requestId: string, isAvailable: boolean) => {
+      try {
+        await availability.respond(requestId, isAvailable);
+        Alert.alert(
+          "Success",
+          isAvailable ? "Marked as available!" : "Marked as unavailable!"
+        );
+        loadData();
+      } catch (error) {
+        Alert.alert("Error", "Failed to respond to request");
+      }
+    };
+
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
         <TopBar title="Availability Requests" />
-
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          ListEmptyComponent={
-            <Text style={{ textAlign: "center", color: theme.subtext, marginTop: 20 }}>
-              No requests yet
-            </Text>
-          }
-          renderItem={({ item, section }) => (
+        <ScrollView 
+          contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        >
+          {/* PENDING REQUESTS SECTION */}
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Pending Requests ({pendingRequests.length})
+          </Text>
+          {pendingRequests.length === 0 ? (
             <Card>
-              <View style={styles.requestHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontWeight: "600", fontSize: 16 }}>
-                    {item.item}
-                  </Text>
-                  <Text style={{ color: theme.subtext, marginTop: 4, fontSize: 14 }}>
-                    {item.outlet}
-                  </Text>
+              <Text style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}>
+                No pending requests
+              </Text>
+            </Card>
+          ) : (
+            pendingRequests.map((req) => (
+              <Card key={req._id}>
+                <View style={styles.requestHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemName, { color: theme.text }]}>{req.itemName}</Text>
+                    <Text style={[styles.requesterName, { color: theme.subtext }]}>
+                      from {typeof req.requestedBy === "object" ? req.requestedBy?.name : "Student"}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: "#f59e0b20" }]}>
+                    <Text style={[styles.statusText, { color: "#f59e0b" }]}>⏳ Pending</Text>
+                  </View>
                 </View>
-                <Text
-                  style={[
-                    styles.badge,
-                    {
-                      color:
-                        item.status === "AVAILABLE"
-                          ? "#10b981"
-                          : item.status === "NOT_AVAILABLE"
-                            ? "#ef4444"
-                            : "#f59e0b",
-                    },
-                  ]}
-                >
-                  {item.status}
-                </Text>
-              </View>
-
-              {section.title === "PENDING REQUESTS" && (
-                <View style={styles.actionRow}>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   <Pressable
-                    onPress={() => handleRespond(item._id, "AVAILABLE")}
+                    onPress={() => handleRespond(req._id, true)}
+                    style={[styles.respondButton, { backgroundColor: "#10b98180", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#10b981" }]}>✓ Available</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleRespond(req._id, false)}
+                    style={[styles.respondButton, { backgroundColor: "#ef444480", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#ef4444" }]}>✗ Unavailable</Text>
+                  </Pressable>
+                </View>
+              </Card>
+            ))
+          )}
+
+          {/* HISTORY SECTION */}
+          <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 20 }]}>
+            History ({historyRequests.length})
+          </Text>
+          {historyRequests.length === 0 ? (
+            <Card>
+              <Text style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}>
+                No responded requests yet
+              </Text>
+            </Card>
+          ) : (
+            historyRequests.map((req) => (
+              <Card key={req._id}>
+                <View style={styles.requestHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemName, { color: theme.text }]}>{req.itemName}</Text>
+                    <Text style={[styles.requesterName, { color: theme.subtext }]}>
+                      from {typeof req.requestedBy === "object" ? req.requestedBy?.name : "Student"}
+                    </Text>
+                  </View>
+                  <View
                     style={[
-                      styles.acceptBtn,
-                      { backgroundColor: theme.primary },
+                      styles.statusBadge,
+                      { backgroundColor: req.response?.available ? "#10b98120" : "#ef444420" },
                     ]}
                   >
-                    <Text style={styles.btnText}>AVAILABLE</Text>
-                  </Pressable>
-
+                    <Text
+                      style={[
+                        styles.statusText,
+                        { color: req.response?.available ? "#10b981" : "#ef4444" },
+                      ]}
+                    >
+                      {req.response?.available ? "✓ Available" : "✗ Not Available"}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                   <Pressable
-                    onPress={() => handleRespond(item._id, "NOT_AVAILABLE")}
-                    style={[styles.rejectBtn, { backgroundColor: "#ef4444" }]}
+                    onPress={() => handleRespond(req._id, true)}
+                    style={[styles.respondButton, { backgroundColor: "#10b98180", flex: 1 }]}
                   >
-                    <Text style={styles.btnText}>NOT AVAILABLE</Text>
+                    <Text style={[styles.respondButtonText, { color: "#10b981" }]}>✓ Available</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleRespond(req._id, false)}
+                    style={[styles.respondButton, { backgroundColor: "#ef444480", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#ef4444" }]}>✗ Unavailable</Text>
                   </Pressable>
                 </View>
-              )}
-            </Card>
+              </Card>
+            ))
           )}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ===== STUDENT VIEW: Only CONFIRMED =====
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+      <TopBar title="Availability Board" />
+      <ScrollView 
+        contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
+        {/* FILTERS */}
+        <Card>
+          <Text style={[styles.label, { color: theme.text }]}>Filter by Outlet</Text>
+          <View style={styles.row}>
+            <Pressable
+              onPress={() => setFilterOutlet(null)}
               style={[
-                styles.sectionHeader,
+                styles.chip,
                 {
-                  color: theme.text,
-                  backgroundColor: theme.bg,
+                  backgroundColor: !filterOutlet ? theme.primary : theme.card,
+                  borderColor: theme.border,
                 },
               ]}
             >
-              {title}
+              <Text
+                style={{
+                  color: !filterOutlet ? "#fff" : theme.text,
+                  fontWeight: "600",
+                  fontSize: 11,
+                }}
+              >
+                All Outlets
+              </Text>
+            </Pressable>
+            {outletsList.map((outlet) => (
+              <Pressable
+                key={outlet._id}
+                onPress={() => setFilterOutlet(filterOutlet === outlet.name ? null : outlet.name)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: filterOutlet === outlet.name ? theme.primary : theme.card,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: filterOutlet === outlet.name ? "#fff" : theme.text,
+                    fontWeight: "600",
+                    fontSize: 10,
+                  }}
+                >
+                  {outlet.name}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
+
+        {/* ANSWERED CHECKS ONLY */}
+        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 12 }]}>
+          Answered Availability Checks
+        </Text>
+        {filtered.length === 0 ? (
+          <Card>
+            <Text style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}>
+              No answered availability checks
             </Text>
-          )}
-        />
-      </View>
+          </Card>
+        ) : (
+          filtered.map((req) => (
+            <Card key={req._id}>
+              <View style={styles.requestHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.itemName, { color: theme.text }]}>{req.itemName}</Text>
+                  <Text style={[styles.requesterName, { color: theme.subtext }]}>
+                    from {typeof req.requestedBy === "object" ? req.requestedBy?.name : "Student"}
+                  </Text>
+                  <Text style={[styles.outletInfo, { color: theme.subtext, marginTop: 4 }]}>
+                    📍 {typeof req.outlet === "object" ? req.outlet?.name : req.outlet}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    { backgroundColor: req.response?.available ? "#10b98120" : "#ef444420" },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: req.response?.available ? "#10b981" : "#ef4444" },
+                    ]}
+                  >
+                    {req.response?.available ? "✓ Yes" : "✗ No"}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+          ))
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
-
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 20,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 14,
-    marginBottom: 8,
-  },
-
-  selectedPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-
-  dropdown: {
-    borderWidth: 1,
-    borderRadius: 12,
-    maxHeight: 200,
-    marginBottom: 12,
-  },
-
-  dropdownItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-  },
-
-  input: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-
-  primaryBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 8,
-  },
-
-  primaryText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-
-  requestHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  badge: {
-    fontSize: 12,
-    fontWeight: "700",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    justifyContent: "flex-end",
-  },
-
-  smallBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-  },
-
-  btnText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 12,
-  },
-
-  acceptBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-
-  rejectBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-
-  changeStatusBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 4,
-  },
-
-  sectionHeader: {
-    fontSize: 14,
-    fontWeight: "700",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-
-  modalButtonRow: {
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "flex-end",
-  },
-
-  modalBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    minWidth: 100,
-    alignItems: "center",
-  },
+  container: { padding: 16 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  sectionTitle: { fontSize: 14, fontWeight: "700", marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
+  row: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
+  requestHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  itemName: { fontSize: 14, fontWeight: "600" },
+  requesterName: { fontSize: 12, marginTop: 4 },
+  outletInfo: { fontSize: 12 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  statusText: { fontSize: 12, fontWeight: "600" },
+  respondButton: { paddingVertical: 10, borderRadius: 8, alignItems: "center" },
+  respondButtonText: { fontSize: 12, fontWeight: "600" },
+  emptyText: { paddingVertical: 20, fontSize: 13 },
+  modeSelector: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#ccc" },
+  modeTab: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "center", borderBottomWidth: 3 },
+  modeTabText: { fontSize: 13 },
 });

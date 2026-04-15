@@ -3,7 +3,6 @@ import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { View, StatusBar } from "react-native";
 import ThemeSwitcherFab from "@/components/ui/ThemeSwitcherFab";
-import RoleSwitcherFab from "@/components/ui/RoleSwitcherFab";
 
 function AppLayout() {
   const { theme } = useTheme();
@@ -29,7 +28,6 @@ function AppLayout() {
       />
 
       {/* FLOATING BUTTONS */}
-      <RoleSwitcherFab />
       <ThemeSwitcherFab />
     </View>
   );

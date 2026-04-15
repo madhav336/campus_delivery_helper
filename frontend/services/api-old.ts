@@ -1,0 +1,220 @@
+import { DeliveryRequest } from "@/types/deliveryRequest";
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://172.16.137.73:5000/api";
+
+/* ================= REQUESTS ================= */
+
+export async function getRequests(): Promise<DeliveryRequest[]> {
+  const response = await fetch(`${BASE_URL}/requests`);
+  if (!response.ok) throw new Error("Failed to fetch requests");
+  return response.json();
+}
+
+export async function createRequest(data: {
+  itemDescription: string;
+  outlet: string;
+  hostel: string;
+  fee: number;
+  userId: string;
+}): Promise<void> {
+  const { userId, ...requestData } = data;
+  const response = await fetch(`${BASE_URL}/requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...requestData,
+      requestedBy: userId,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    console.log("BACKEND ERROR:", text);
+    throw new Error("Failed to create request");
+  }
+}
+
+export async function updateRequest(
+  id: string,
+  data: {
+    itemDescription: string;
+    outlet: string;
+    hostel: string;
+    fee: number;
+  }
+): Promise<void> {
+  const response = await fetch(`${BASE_URL}/requests/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) throw new Error("Failed to update request");
+}
+
+export async function deleteRequest(id: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/requests/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) throw new Error("Failed to delete request");
+}
+export async function acceptRequest(id: string, userId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/requests/${id}/accept`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok) throw new Error("Failed to accept");
+}
+
+export async function completeRequest(id: string, userId: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/requests/${id}/complete`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok) throw new Error("Failed to complete");
+}
+
+
+
+
+
+/* ================= USERS ================= */
+
+export async function getUsers() {
+  const res = await fetch(`${BASE_URL}/users`);
+  if (!res.ok) throw new Error("Failed to fetch users");
+  return res.json();
+}
+
+export async function createUser(data: {
+  name: string;
+  role: "STUDENT" | "OUTLET_OWNER";
+  hostel: string;
+}) {
+  const res = await fetch(`${BASE_URL}/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create user");
+}
+
+export async function updateUser(
+  id: string,
+  data: {
+    name: string;
+    role: "STUDENT" | "OUTLET_OWNER";
+    hostel: string;
+  }
+) {
+  const res = await fetch(`${BASE_URL}/users/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update user");
+}
+
+export async function deleteUser(id: string) {
+  const res = await fetch(`${BASE_URL}/users/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete user");
+}
+
+/* ================= OUTLETS ================= */
+
+export async function getOutlets() {
+  const res = await fetch(`${BASE_URL}/outlets`);
+  if (!res.ok) throw new Error("Failed to fetch outlets");
+  return res.json();
+}
+
+export async function createOutlet(data: {
+  name: string;
+  locationDescription: string;
+}) {
+  const res = await fetch(`${BASE_URL}/outlets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create outlet");
+}
+
+export async function updateOutlet(
+  id: string,
+  data: {
+    name: string;
+    locationDescription: string;
+  }
+) {
+  const res = await fetch(`${BASE_URL}/outlets/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update outlet");
+}
+
+export async function deleteOutlet(id: string) {
+  const res = await fetch(`${BASE_URL}/outlets/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete outlet");
+}
+/* ================= AVAILABILITY ================= */
+
+export async function getAvailability() {
+  const res = await fetch(`${BASE_URL}/availability`);
+  if (!res.ok) throw new Error("Failed to fetch availability");
+  return res.json();
+}
+
+export async function createAvailability(data: {
+  userId: string;
+  outlet: string;
+  item: string;
+}) {
+  const { userId, ...availData } = data;
+  const res = await fetch(`${BASE_URL}/availability`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...availData,
+      requestedBy: userId,
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to create availability");
+}
+
+export async function respondAvailability(id: string, status: 'AVAILABLE' | 'NOT_AVAILABLE') {
+  const res = await fetch(`${BASE_URL}/availability/${id}/respond`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to respond to availability");
+}
+
+export async function updateAvailability(
+  id: string,
+  data: { item: string; outlet: string }
+) {
+  const res = await fetch(`${BASE_URL}/availability/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update availability");
+}
+
+export async function deleteAvailability(id: string) {
+  const res = await fetch(`${BASE_URL}/availability/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete availability");
+}

@@ -21,18 +21,10 @@ export default function Card({ children }: any) {
 
 const styles = StyleSheet.create({
   card: {
-    name: {
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 6,
-    },
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
-
     borderWidth: 1,
-
-    // 👇 THIS is the magic (soft elevation)
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 8,

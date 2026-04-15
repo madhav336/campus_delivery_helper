@@ -1,24 +1,58 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const deliveryRequestSchema = new mongoose.Schema({
-    itemDescription: { type: String, required: true },
-    outlet: { type: String, required: true },
-    hostel: { type: String, required: true },
-    fee: { type: Number, required: true },
+const deliveryRequestSchema = new Schema({
+    itemDescription: { 
+      type: String, 
+      required: true 
+    },
+    // outlet can be either string (for simple outlets like "ANC 1", "ANC 2")
+    // or ObjectId (for database-referenced outlets)
+    outlet: {
+      type: Schema.Types.Mixed,
+      required: true
+    },
+    hostel: { 
+      type: String, 
+      required: true 
+    },
+    fee: { 
+      type: Number, 
+      required: true 
+    },
     status: {
         type: String,
         enum: ['OPEN', 'IN_PROGRESS', 'COMPLETED'],
         default: 'OPEN'
+    },
+    requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
     acceptedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null
     },
-    requestedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
+    // Ratings - stored as subdocuments
+    requesterRating: {
+      rating: { type: Number, min: 1, max: 5, default: null },
+      feedback: { type: String, default: null },
+      givenAt: { type: Date, default: null }
+    },
+    delivererRating: {
+      rating: { type: Number, min: 1, max: 5, default: null },
+      feedback: { type: String, default: null },
+      givenAt: { type: Date, default: null }
+    },
+    completedAt: {
+      type: Date,
+      default: null
+    },
+    isExpiredPending: {
+      type: Boolean,
+      default: false
     }
 }, { timestamps: true });
 

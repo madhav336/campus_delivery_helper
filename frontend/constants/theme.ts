@@ -8,6 +8,7 @@ export const Themes = {
     border: "#e5e7eb",
     tab: "#0a7ea4",
     inactive: "#9ca3af",
+    icon: "#111827",
   },
 
   dark: {
@@ -19,6 +20,7 @@ export const Themes = {
     border: "#334155",
     tab: "#60a5fa",
     inactive: "#64748b",
+    icon: "#f1f5f9",
   },
 
   neon: {
@@ -30,5 +32,19 @@ export const Themes = {
     border: "#1f2937",
     tab: "#22d3ee",
     inactive: "#475569",
+    icon: "#e0f2fe",
+  },
+};
+
+export const Colors = {
+  light: { 
+    icon: "#111827",
+    background: "#ffffff",
+    text: "#111827",
+  },
+  dark: { 
+    icon: "#f1f5f9",
+    background: "#0f172a",
+    text: "#f1f5f9",
   },
 };

@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 
 const availabilityRequestSchema = new mongoose.Schema({
-    item: {
+    itemName: {
         type: String,
         required: true
     },
     outlet: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Outlet',
         required: true
     },
     requestedBy: {
@@ -16,12 +17,17 @@ const availabilityRequestSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['PENDING', 'AVAILABLE', 'NOT_AVAILABLE'],
+        enum: ['PENDING', 'CONFIRMED'],
         default: 'PENDING'
     },
-    outletOwner: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
+    response: {
+        available: { type: Boolean, default: null },
+        respondedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        respondedAt: { type: Date, default: null }
+    },
+    expiresAt: {
+        type: Date,
+        required: true
     }
 }, { timestamps: true });
 
