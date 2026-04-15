@@ -1,14 +1,16 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
-const deliveryRequestSchema = new mongoose.Schema({
+const deliveryRequestSchema = new Schema({
     itemDescription: { 
       type: String, 
       required: true 
     },
-    outlet: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Outlet',
-      required: true 
+    // outlet can be either string (for simple outlets like "ANC 1", "ANC 2")
+    // or ObjectId (for database-referenced outlets)
+    outlet: {
+      type: Schema.Types.Mixed,
+      required: true
     },
     hostel: { 
       type: String, 
@@ -47,6 +49,10 @@ const deliveryRequestSchema = new mongoose.Schema({
     completedAt: {
       type: Date,
       default: null
+    },
+    isExpiredPending: {
+      type: Boolean,
+      default: false
     }
 }, { timestamps: true });
 

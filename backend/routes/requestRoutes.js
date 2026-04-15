@@ -18,20 +18,19 @@ router.post('/', verifyToken, requireRole('student'), async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Handle outlet: convert name to ObjectId if needed
-    let outletId = outlet;
-    if (!outlet.match(/^[0-9a-fA-F]{24}$/)) {
-      // It's not an ObjectId, so try to find outlet by name
-      const outletDoc = await Outlet.findOne({ name: outlet });
-      if (!outletDoc) {
-        return res.status(400).json({ message: `Outlet "${outlet}" not found` });
-      }
-      outletId = outletDoc._id;
+    // Handle outlet: can be a string (ANC 1, ANC 2, CP, Other, or custom names)
+    // or an ObjectId reference (for database outlets used in availability)
+    let outletValue = outlet;
+    
+    // If it's a valid ObjectId format, try to reference it
+    if (outlet.match(/^[0-9a-fA-F]{24}$/)) {
+      outletValue = outlet; // Keep as is - will be ObjectId
     }
+    // Otherwise, store as a simple string (ANC 1, ANC 2, CP, Custom Outlet, etc)
 
     const deliveryReq = new DeliveryRequest({
       itemDescription,
-      outlet: outletId,
+      outlet: outletValue,
       hostel,
       fee,
       status: 'OPEN',
@@ -64,20 +63,22 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     if (filter === 'all') {
-      // Public board: all OPEN requests except own
+      // Public board: all OPEN requests except own and expired pending
       query = {
         status: 'OPEN',
-        requestedBy: { $ne: req.user.userId }
+        requestedBy: { $ne: req.user.userId },
+        isExpiredPending: false
       };
 
-      // Apply filters - search by outlet name
+      // Apply filters - search by outlet (string or database outlet)
       if (outlet) {
+        // First, try to find outlet as a database outlet by name
         const outletDoc = await Outlet.findOne({ name: new RegExp(outlet, 'i') });
         if (outletDoc) {
           query.outlet = outletDoc._id;
         } else {
-          // No matching outlet, return empty array
-          return res.json({ requests: [] });
+          // No database outlet found, try to match as a string outlet using case-insensitive regex
+          query.outlet = new RegExp('^' + outlet + '$', 'i');
         }
       }
       if (minFee || maxFee) {
@@ -86,8 +87,11 @@ router.get('/', verifyToken, async (req, res) => {
         if (maxFee) query.fee.$lte = Number(maxFee);
       }
     } else if (filter === 'own') {
-      // User's own requests
+      // User's own requests (where user is the requester)
       query = { requestedBy: req.user.userId };
+    } else if (filter === 'accepted') {
+      // Requests user has accepted (deliveries user is doing)
+      query = { acceptedBy: req.user.userId };
     } else if (filter === 'inprogress') {
       // In-progress requests where user is involved
       query = {
@@ -108,8 +112,27 @@ router.get('/', verifyToken, async (req, res) => {
     const requests = await DeliveryRequest.find(query)
       .populate('requestedBy', 'name phone requesterRating delivererRating')
       .populate('acceptedBy', 'name phone requesterRating delivererRating')
-      .populate('outlet', 'name locationDescription')
       .sort(sort);
+
+    res.json({ requests });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
+ * GET /api/requests/unaccepted/list
+ * Get user's expired pending requests (not accepted within 24 hours)
+ */
+router.get('/unaccepted/list', verifyToken, async (req, res) => {
+  try {
+    const requests = await DeliveryRequest.find({
+      requestedBy: req.user.userId,
+      isExpiredPending: true
+    })
+      .populate('requestedBy', 'name phone requesterRating delivererRating')
+      .populate('acceptedBy', 'name phone requesterRating delivererRating')
+      .sort({ createdAt: -1 });
 
     res.json({ requests });
   } catch (error) {
@@ -125,8 +148,7 @@ router.get('/:id', verifyToken, async (req, res) => {
   try {
     const request = await DeliveryRequest.findById(req.params.id)
       .populate('requestedBy', 'name email phone requesterRating delivererRating')
-      .populate('acceptedBy', 'name email phone requesterRating delivererRating')
-      .populate('outlet', 'name locationDescription');
+      .populate('acceptedBy', 'name email phone requesterRating delivererRating');
 
     if (!request) {
       return res.status(404).json({ message: 'Request not found' });
@@ -301,14 +323,16 @@ router.put('/:id/rate', verifyToken, requireRole('student'), async (req, res) =>
     }
 
     // Store rating
+    // When requester rates: they're rating the deliverer (delivererRating)
+    // When deliverer rates: they're rating the requester (requesterRating)
     if (isRequester) {
-      request.requesterRating = {
+      request.delivererRating = {
         rating: Number(rating),
         feedback: feedback || null,
         givenAt: new Date()
       };
     } else {
-      request.delivererRating = {
+      request.requesterRating = {
         rating: Number(rating),
         feedback: feedback || null,
         givenAt: new Date()
@@ -363,5 +387,25 @@ async function updateUserRatings(userId, ratingType) {
     console.error('Error updating user ratings:', error);
   }
 }
+
+/**
+ * GET /api/requests/unaccepted/list
+ * Get user's expired pending requests (not accepted within 24 hours)
+ */
+router.get('/unaccepted/list', verifyToken, async (req, res) => {
+  try {
+    const requests = await DeliveryRequest.find({
+      requestedBy: req.user.userId,
+      isExpiredPending: true
+    })
+      .populate('requestedBy', 'name phone requesterRating delivererRating')
+      .populate('acceptedBy', 'name phone requesterRating delivererRating')
+      .sort({ createdAt: -1 });
+
+    res.json({ requests });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 
 module.exports = router;

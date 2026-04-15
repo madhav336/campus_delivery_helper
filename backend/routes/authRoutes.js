@@ -51,7 +51,7 @@ router.post('/signup', async (req, res) => {
         return res.status(400).json({ message: 'Outlet details required for outlet owners' });
       }
       
-      // Create outlet
+      // Create outlet with owner reference
       const outlet = new Outlet({
         name: outletName,
         locationDescription: outletLocation,
@@ -69,6 +69,10 @@ router.post('/signup', async (req, res) => {
         requesterRating: 0,
         delivererRating: 0
       });
+      
+      // Update outlet with owner reference
+      outlet.owner = user._id;
+      await outlet.save();
     } else if (role === 'admin') {
       // Only allow admin creation via backend directly (not signup)
       return res.status(403).json({ message: 'Admin role not available via signup' });

@@ -1,5 +1,5 @@
 const schedule = require('node-schedule');
-const { logDailyStats, cleanupExpiredAvailabilities } = require('./cleanup');
+const { logDailyStats, cleanupExpiredAvailabilities, markExpiredPendingDeliveries } = require('./cleanup');
 
 /**
  * Start scheduled jobs
@@ -10,6 +10,7 @@ function startScheduler() {
     console.log('🌙 Running nightly maintenance job...');
     await logDailyStats();
     await cleanupExpiredAvailabilities();
+    await markExpiredPendingDeliveries();
     console.log('✅ Nightly maintenance complete');
   });
 

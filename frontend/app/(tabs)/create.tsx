@@ -39,16 +39,15 @@ export default function CreateScreen() {
   const [outletsList, setOutletsList] = useState<Outlet[]>([]);
   const [loadingOutlets, setLoadingOutlets] = useState(true);
 
-  // DELIVERY mode states
+  // DELIVERY mode states (simple text outlets, no DB)
   const [deliveryItem, setDeliveryItem] = useState("");
-  const [deliveryOutlet, setDeliveryOutlet] = useState<Outlet | null>(null);
-  const [outletSearch, setOutletSearch] = useState("");
-  const [showOutletDropdown, setShowOutletDropdown] = useState(false);
+  const [deliveryOutlet, setDeliveryOutlet] = useState<string>("");
+  const [deliveryCustomOutlet, setDeliveryCustomOutlet] = useState("");
   const [hostel, setHostel] = useState("");
   const [fee, setFee] = useState("");
   const [deliveryLoading, setDeliveryLoading] = useState(false);
 
-  // AVAILABILITY mode states
+  // AVAILABILITY mode states (uses DB outlets)
   const [availabilityItem, setAvailabilityItem] = useState("");
   const [availabilityOutlet, setAvailabilityOutlet] = useState<Outlet | null>(null);
   const [availOutletSearch, setAvailOutletSearch] = useState("");
@@ -61,7 +60,8 @@ export default function CreateScreen() {
       const data = await outlets.getAll();
       setOutletsList(data);
     } catch (error) {
-      Alert.alert("Error", "Failed to load outlets");
+      // Silently fail - outlets are only needed for availability mode
+      setOutletsList([]);
     } finally {
       setLoadingOutlets(false);
     }
@@ -73,17 +73,15 @@ export default function CreateScreen() {
     }, [loadOutlets])
   );
 
-  const filteredDeliveryOutlets = (outletsList || []).filter((o) =>
-    o.name.toLowerCase().includes(outletSearch.toLowerCase())
-  );
-
   const filteredAvailOutlets = (outletsList || []).filter((o) =>
     o.name.toLowerCase().includes(availOutletSearch.toLowerCase())
   );
 
-  // ===== DELIVERY CREATE =====
+  // ===== DELIVERY CREATE (Simple Text Outlets) =====
+  const finalDeliveryOutlet =
+    deliveryOutlet === "Other" ? deliveryCustomOutlet : deliveryOutlet;
   const deliveryValid =
-    deliveryItem && deliveryOutlet && hostel && Number(fee) > 0;
+    deliveryItem && finalDeliveryOutlet && hostel && Number(fee) > 0;
 
   const handleDeliverySubmit = async () => {
     if (!deliveryValid) {
@@ -95,16 +93,15 @@ export default function CreateScreen() {
       setDeliveryLoading(true);
       await requests.create(
         deliveryItem,
-        deliveryOutlet._id,
+        finalDeliveryOutlet,
         hostel,
         Number(fee)
       );
 
       Alert.alert("Success", "Delivery request created! ✅");
       setDeliveryItem("");
-      setDeliveryOutlet(null);
-      setOutletSearch("");
-      setShowOutletDropdown(false);
+      setDeliveryOutlet("");
+      setDeliveryCustomOutlet("");
       setHostel("");
       setFee("");
 
@@ -256,84 +253,25 @@ export default function CreateScreen() {
                     ]}
                   />
 
-                  {/* OUTLET SELECTION */}
+                  {/* OUTLET SELECTION (ANC 1, ANC 2, CP, Other) */}
                   <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
                     Outlet
                   </Text>
-                  <TextInput
-                    value={outletSearch}
-                    onChangeText={(text) => {
-                      setOutletSearch(text);
-                      setShowOutletDropdown(true);
-                    }}
-                    onFocus={() => setShowOutletDropdown(true)}
-                    placeholder="Search outlets..."
-                    placeholderTextColor={theme.subtext}
-                    style={[
-                      styles.input,
-                      {
-                        color: theme.text,
-                        borderColor: theme.border,
-                        backgroundColor: theme.bg,
-                      },
-                    ]}
-                  />
-
-                  {deliveryOutlet && (
-                    <View style={[styles.selectedPill, { backgroundColor: theme.primary + "20" }]}>
-                      <Text style={{ color: theme.primary, fontWeight: "600" }}>
-                        ✓ {deliveryOutlet.name}
-                      </Text>
-                      <Pressable onPress={() => setDeliveryOutlet(null)}>
-                        <Text style={{ color: theme.primary, fontSize: 16 }}>×</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  {showOutletDropdown && filteredDeliveryOutlets.length > 0 && (
-                    <ScrollView
-                      style={[
-                        styles.dropdown,
-                        { backgroundColor: theme.bg, borderColor: theme.border },
-                      ]}
-                      scrollEnabled={filteredDeliveryOutlets.length > 4}
-                      nestedScrollEnabled
-                    >
-                      {filteredDeliveryOutlets.map((o) => (
-                        <Pressable
-                          key={o._id}
-                          onPress={() => {
-                            setDeliveryOutlet(o);
-                            setOutletSearch(o.name);
-                            setShowOutletDropdown(false);
-                          }}
-                          style={[styles.dropdownItem, { borderBottomColor: theme.border }]}
-                        >
-                          <Text style={{ color: theme.text, fontWeight: "500" }}>
-                            {o.name}
-                          </Text>
-                          <Text style={[styles.outletDesc, { color: theme.subtext }]}>
-                            {o.locationDescription}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  )}
-
-                  {/* HOSTEL */}
-                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                    Hostel
-                  </Text>
                   <View style={styles.row}>
-                    {["ANC 1", "ANC 2", "CP", "Other"].map((h) => (
+                    {["ANC 1", "ANC 2", "CP", "Other"].map((o) => (
                       <Pressable
-                        key={h}
-                        onPress={() => setHostel(h)}
+                        key={o}
+                        onPress={() => {
+                          setDeliveryOutlet(o);
+                          if (o !== "Other") {
+                            setDeliveryCustomOutlet("");
+                          }
+                        }}
                         style={[
                           styles.chip,
                           {
                             backgroundColor:
-                              hostel === h ? theme.primary : theme.card,
+                              deliveryOutlet === o ? theme.primary : theme.card,
                             borderColor: theme.border,
                             borderWidth: 1,
                           },
@@ -341,16 +279,58 @@ export default function CreateScreen() {
                       >
                         <Text
                           style={{
-                            color: hostel === h ? "#fff" : theme.text,
+                            color: deliveryOutlet === o ? "#fff" : theme.text,
                             fontWeight: "600",
                             fontSize: 12,
                           }}
                         >
-                          {h}
+                          {o}
                         </Text>
                       </Pressable>
                     ))}
                   </View>
+
+                  {/* CUSTOM OUTLET NAME (if Other selected) */}
+                  {deliveryOutlet === "Other" && (
+                    <>
+                      <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                        Outlet Name
+                      </Text>
+                      <TextInput
+                        placeholder="Enter outlet name (e.g., Hotel, Mess, Cafe)"
+                        placeholderTextColor={theme.subtext}
+                        value={deliveryCustomOutlet}
+                        onChangeText={setDeliveryCustomOutlet}
+                        style={[
+                          styles.input,
+                          {
+                            color: theme.text,
+                            borderColor: theme.border,
+                            backgroundColor: theme.bg,
+                          },
+                        ]}
+                      />
+                    </>
+                  )}
+
+                  {/* HOSTEL */}
+                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                    Hostel
+                  </Text>
+                  <TextInput
+                    placeholder="Enter your hostel name"
+                    placeholderTextColor={theme.subtext}
+                    value={hostel}
+                    onChangeText={setHostel}
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: theme.border,
+                        color: theme.text,
+                        backgroundColor: theme.card,
+                      },
+                    ]}
+                  />
 
                   {/* FEE */}
                   <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>

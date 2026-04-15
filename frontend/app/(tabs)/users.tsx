@@ -5,30 +5,57 @@ import {
   Pressable,
   FlatList,
   Alert,
+  TextInput,
+  Modal,
+  ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { users } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import Card from "@/components/ui/Card";
 import TopBar from "@/components/ui/TopBar";
+import { Ionicons } from "@expo/vector-icons";
+
+type UserItem = {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  hostel?: string | null;
+  createdAt?: string;
+};
 
 export default function UsersScreen() {
   const { theme } = useTheme();
+  const [usersList, setUsersList] = useState<UserItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [usersList, setUsersList] = useState<any[]>([]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchUsers();
+    setRefreshing(false);
+  }, []);
+
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editHostel, setEditHostel] = useState("");
 
   const fetchUsers = async () => {
     try {
+      setLoading(true);
       const data = await users.getAll();
-      // Filter out outlet owners - show only students and admins
-      const filteredUsers = (data.users || []).filter(
-        (user: any) => user.role !== 'outlet_owner'
-      );
-      setUsersList(filteredUsers);
+      setUsersList((data.users || []) as UserItem[]);
     } catch (error) {
-      console.error("Failed to fetch users", error);
       Alert.alert("Error", "Failed to fetch users");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,85 +63,203 @@ export default function UsersScreen() {
     fetchUsers();
   }, []);
 
-  const handleCreate = async () => {
-    Alert.alert("Info", "New users are created through the signup process. This admin panel only allows deleting users.");
+  const filteredUsers = useMemo(() => {
+    return usersList
+      .filter((user) => user.role === "student")
+      .filter((user) => {
+        if (!query.trim()) return true;
+        const q = query.toLowerCase();
+        return (
+          user.name?.toLowerCase().includes(q) ||
+          user.email?.toLowerCase().includes(q) ||
+          user.phone?.toLowerCase().includes(q)
+        );
+      });
+  }, [usersList, query]);
+
+  const openEdit = (user: UserItem) => {
+    setEditingUser(user);
+    setEditName(user.name || "");
+    setEditPhone(user.phone || "");
+    setEditHostel(user.hostel || "");
   };
 
-  const handleDelete = async (id: string) => {
-    Alert.alert("Delete User", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await users.delete(id);
-            Alert.alert("Success", "User deleted! ✅");
-            fetchUsers();
-          } catch (error) {
-            Alert.alert("Error", "Failed to delete user");
-            console.error("Failed to delete user", error);
-          }
+  const closeEdit = () => {
+    setEditingUser(null);
+    setEditName("");
+    setEditPhone("");
+    setEditHostel("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingUser) return;
+    if (!editName.trim() || !editPhone.trim()) {
+      Alert.alert("Validation", "Name and phone are required");
+      return;
+    }
+
+    try {
+      await users.updateFields(editingUser._id, {
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        hostel: editHostel.trim() || null,
+      });
+      Alert.alert("Success", "User updated");
+      closeEdit();
+      fetchUsers();
+    } catch (error) {
+      Alert.alert("Error", "Failed to update user");
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    Alert.alert(
+      "Delete User",
+      `Delete ${name}? This will also delete related requests.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await users.delete(id);
+              Alert.alert("Success", "User deleted");
+              fetchUsers();
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete user");
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <View style={styles.container}>
-        <TopBar title="Users (Admin)" />
+        <TopBar title="Students (Admin)" />
 
-        {/* INFO */}
         <Card>
-          <Text style={[styles.formTitle, { color: theme.text }]}>
-            User Management
-          </Text>
-          <Text style={{ color: theme.subtext, marginBottom: 12 }}>
-            View all users and manage their accounts. New users are created through the signup process.
-          </Text>
+          <Text style={[styles.title, { color: theme.text }]}>Student Management</Text>
+
+          <TextInput
+            placeholder="Search by name, email, or phone"
+            placeholderTextColor={theme.subtext}
+            value={query}
+            onChangeText={setQuery}
+            style={[
+              styles.input,
+              { borderColor: theme.border, color: theme.text, backgroundColor: theme.bg },
+            ]}
+          />
+
+          <Text style={[styles.countText, { color: theme.subtext }]}>Showing {filteredUsers.length} students</Text>
         </Card>
 
-        {/* LIST */}
-        <FlatList
-          data={usersList}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          ListEmptyComponent={
-            <Text style={{ textAlign: "center", color: theme.subtext }}>
-              No users yet
-            </Text>
-          }
-          renderItem={({ item }) => (
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredUsers}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+            ListEmptyComponent={
+              <Card>
+                <Text style={{ textAlign: "center", color: theme.subtext }}>No students found</Text>
+              </Card>
+            }
+            renderItem={({ item }) => (
+              <Card>
+                <View style={styles.userHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.name, { color: theme.text }]}>{item.name}</Text>
+                    <Text style={{ color: theme.subtext, marginTop: 4 }}>{item.email}</Text>
+                    <Text style={{ color: theme.subtext, marginTop: 2 }}>Phone: {item.phone}</Text>
+                    {item.hostel && (
+                      <Text style={{ color: theme.subtext, marginTop: 2 }}>Hostel: {item.hostel}</Text>
+                    )}
+                  </View>
+                  <View style={styles.actionCol}>
+                    <Pressable onPress={() => openEdit(item)} style={styles.iconButton}>
+                      <Ionicons name="pencil" size={17} color={theme.primary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleDelete(item._id, item.name)}
+                      style={styles.iconButton}
+                    >
+                      <Ionicons name="trash" size={17} color="#dc2626" />
+                    </Pressable>
+                  </View>
+                </View>
+              </Card>
+            )}
+          />
+        )}
+      </View>
+
+      <Modal visible={!!editingUser} animationType="slide" transparent>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <ScrollView contentContainerStyle={styles.modalWrap}>
             <Card>
-              <Text style={[styles.name, { color: theme.text }]}>
-                {item.name}
-              </Text>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.title, { color: theme.text }]}>Edit Student</Text>
+                <Pressable onPress={closeEdit}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </Pressable>
+              </View>
 
-              <Text style={{ color: theme.subtext, marginBottom: 4 }}>
-                Email: {item.email}
-              </Text>
-              <Text style={{ color: theme.subtext, marginBottom: 4 }}>
-                Role: {item.role === 'student' ? 'Student' : 'Admin'}
-              </Text>
-              {item.hostel && (
-                <Text style={{ color: theme.subtext, marginBottom: 12 }}>
-                  Hostel: {item.hostel}
-                </Text>
-              )}
+              <Text style={[styles.label, { color: theme.text }]}>Name</Text>
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Name"
+                placeholderTextColor={theme.subtext}
+                style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.bg }]}
+              />
 
-              <View style={styles.cardActions}>
+              <Text style={[styles.label, { color: theme.text }]}>Phone</Text>
+              <TextInput
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="Phone"
+                placeholderTextColor={theme.subtext}
+                style={[styles.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.bg }]}
+              />
+
+              <Text style={[styles.label, { color: theme.text }]}>Hostel</Text>
+              <TextInput
+                value={editHostel}
+                onChangeText={setEditHostel}
+                placeholder="Hostel"
+                placeholderTextColor={theme.subtext}
+                style={[
+                  styles.input,
+                  { borderColor: theme.border, color: theme.text, backgroundColor: theme.bg },
+                ]}
+              />
+
+              <View style={styles.modalActions}>
                 <Pressable
-                  onPress={() => handleDelete(item._id)}
-                  style={[styles.deleteBtn, { flex: 1 }]}
+                  onPress={closeEdit}
+                  style={[styles.modalButton, { backgroundColor: theme.border }]}
                 >
-                  <Text style={styles.deleteText}>Delete User</Text>
+                  <Text style={[styles.modalButtonText, { color: theme.text }]}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSaveEdit}
+                  style={[styles.modalButton, { backgroundColor: theme.primary }]}
+                >
+                  <Text style={[styles.modalButtonText, { color: "#fff" }]}>Save</Text>
                 </Pressable>
               </View>
             </Card>
-          )}
-        />
-      </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -124,78 +269,83 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
-
-  formTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 12,
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-
+  title: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  subtitle: {
+    marginTop: 6,
+    marginBottom: 12,
+    fontSize: 13,
+  },
   input: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-
-  roleRow: {
+  roleFilterRow: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: "wrap",
   },
-
-  roleButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
+  roleChip: {
     borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-
-  buttonRow: {
+  countText: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  userHeader: {
     flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-
-  cancelBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-  },
-
   name: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  actionCol: {
+    gap: 6,
+    marginLeft: 8,
+  },
+  iconButton: {
+    padding: 8,
+  },
+  modalWrap: {
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 13,
     fontWeight: "700",
     marginBottom: 6,
   },
-
-  cardActions: {
+  modalActions: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
+    marginTop: 8,
   },
-
-  editBtn: {
+  modalButton: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 2,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: "center",
   },
-
-  deleteBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: "#fee2e2",
-    alignItems: "center",
-  },
-
-  deleteText: {
-    color: "#dc2626",
+  modalButtonText: {
     fontWeight: "700",
   },
 });

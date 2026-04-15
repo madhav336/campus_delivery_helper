@@ -12,8 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { requests, availability } from "@/services/api";
+import { requests, availability, outlets } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
@@ -50,19 +51,19 @@ interface AvailabilityRequest {
 }
 
 export default function ActivityScreen() {
+  const router = useRouter();
   const { theme } = useTheme();
   const [mode, setMode] = useState<"deliveries" | "requests" | "availability">(
     "deliveries"
   );
   const [allDeliveries, setAllDeliveries] = useState<DeliveryRequest[]>([]);
+  const [allRequests, setAllRequests] = useState<DeliveryRequest[]>([]);
   const [allAvailabilities, setAllAvailabilities] = useState<AvailabilityRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [unacceptedRequests, setUnacceptedRequests] = useState<DeliveryRequest[]>([]);
 
-  // Edit/Delete states
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editItem, setEditItem] = useState("");
-  const [editOutlet, setEditOutlet] = useState("");
+  const [outletsList, setOutletsList] = useState<any[]>([]);
 
   // Rating modal
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
@@ -82,19 +83,37 @@ export default function ActivityScreen() {
         console.error("Failed to load user ID:", error);
       }
     };
+    const loadOutlets = async () => {
+      try {
+        const data = await outlets.getAll();
+        setOutletsList(data || []);
+      } catch (error) {
+        console.warn("Failed to load outlets");
+        setOutletsList([]);
+      }
+    };
     loadUserId();
+    loadOutlets();
   }, []);
 
   const loadData = useCallback(async () => {
     if (!currentUserId) return;
     try {
       setLoading(true);
-      const [ownRequests, ownAvailability] = await Promise.all([
-        requests.getAll("own"),
-        availability.getOwn(),
-      ]);
-      setAllDeliveries(ownRequests);
+      const [acceptedReqs, ownReqs, ownAvailability, unaccepted] = await Promise.all([
+        requests.getAll("accepted"),  // Deliveries they accepted (only where acceptedBy === user)
+        requests.getAll("own"),       // Requests they created (only where requestedBy === user)
+        availability.getOwn(),        // Availability requests they created
+        requests.getUnaccepted(),     // Unaccepted/expired pending requests
+      ]) as [DeliveryRequest[], DeliveryRequest[], AvailabilityRequest[], DeliveryRequest[]];
+      // Ensure no overlap: filter out any requests in deliveries that also appear in own requests
+      const filteredDeliveries = acceptedReqs.filter(
+        (accept: DeliveryRequest) => !ownReqs.some((own: DeliveryRequest) => own._id === accept._id)
+      );
+      setAllDeliveries(filteredDeliveries);
+      setAllRequests(ownReqs);
       setAllAvailabilities(ownAvailability);
+      setUnacceptedRequests(unaccepted || []);
     } catch (error) {
       Alert.alert("Error", "Failed to load activity");
     } finally {
@@ -253,28 +272,51 @@ export default function ActivityScreen() {
                 .filter((d) => d.status === "IN_PROGRESS")
                 .map((delivery) => (
                   <Card key={delivery._id}>
-                    <View style={styles.header}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.item, { color: theme.text }]}>
-                          {delivery.itemDescription}
-                        </Text>
-                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                    <View style={styles.deliveryItemHeader}>
+                      <Text style={[styles.item, { color: theme.text }]}>
+                        {delivery.itemDescription}
+                      </Text>
+                    </View>
+
+                    <View style={styles.routeContainer}>
+                      <View style={styles.routeRow}>
+                        <Text style={[styles.routeLabel, { color: theme.subtext }]}>From:</Text>
+                        <Text style={[styles.routeValue, { color: theme.text }]}>
                           {typeof delivery.outlet === "object"
                             ? delivery.outlet?.name
-                            : delivery.outlet}{" "}
-                          → {delivery.hostel}
+                            : delivery.outlet}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.feeBadge,
-                          { backgroundColor: theme.primary + "20" },
-                        ]}
-                      >
-                        <Text style={[styles.fee, { color: theme.primary }]}>
-                          ₹{delivery.fee}
+                      <View style={styles.routeRow}>
+                        <Text style={[styles.routeLabel, { color: theme.subtext }]}>To:</Text>
+                        <Text style={[styles.routeValue, { color: theme.text }]}>
+                          {delivery.hostel}
                         </Text>
                       </View>
+                    </View>
+
+                    <View style={[styles.requesterCard, { backgroundColor: theme.primary + "10" }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.requesterLabel, { color: theme.subtext }]}>Requested by:</Text>
+                        <Text style={[styles.requesterName, { color: theme.text }]}>
+                          {typeof delivery.requestedBy === "object"
+                            ? delivery.requestedBy?.name
+                            : "Student"}
+                        </Text>
+                      </View>
+                      {typeof delivery.requestedBy === "object" && delivery.requestedBy?.phone && (
+                        <View style={{ alignItems: "flex-end" }}>
+                          <Ionicons name="call" size={14} color={theme.primary} />
+                          <Text style={[styles.phoneText, { color: theme.text }]}>
+                            {delivery.requestedBy.phone}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={[styles.feeBadgeRow, { backgroundColor: theme.primary + "15" }]}>
+                      <Ionicons name="wallet" size={16} color={theme.primary} />
+                      <Text style={[styles.feeText, { color: theme.primary }]}>₹{delivery.fee}</Text>
                     </View>
 
                     <Pressable
@@ -318,32 +360,50 @@ export default function ActivityScreen() {
                 .filter((d) => d.status === "COMPLETED")
                 .map((delivery) => (
                   <Card key={delivery._id}>
-                    <View style={styles.header}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.item, { color: theme.text }]}>
-                          {delivery.itemDescription}
-                        </Text>
-                        <Text style={[styles.subtext, { color: theme.subtext }]}>
+                    <View style={styles.deliveryItemHeader}>
+                      <Text style={[styles.item, { color: theme.text }]}>
+                        {delivery.itemDescription}
+                      </Text>
+                    </View>
+
+                    <View style={styles.routeContainer}>
+                      <View style={styles.routeRow}>
+                        <Text style={[styles.routeLabel, { color: theme.subtext }]}>From:</Text>
+                        <Text style={[styles.routeValue, { color: theme.text }]}>
                           {typeof delivery.outlet === "object"
                             ? delivery.outlet?.name
-                            : delivery.outlet}{" "}
-                          → {delivery.hostel}
+                            : delivery.outlet}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.feeBadge,
-                          { backgroundColor: "#10b98120" },
-                        ]}
-                      >
-                        <Text style={[styles.fee, { color: "#10b981" }]}>
-                          ✓ Done
+                      <View style={styles.routeRow}>
+                        <Text style={[styles.routeLabel, { color: theme.subtext }]}>To:</Text>
+                        <Text style={[styles.routeValue, { color: theme.text }]}>
+                          {delivery.hostel}
                         </Text>
                       </View>
                     </View>
 
-                    {!delivery.delivererRating ||
-                    !delivery.delivererRating?.rating ? (
+                    <View style={[styles.requesterCard, { backgroundColor: "#10b98110" }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.requesterLabel, { color: theme.subtext }]}>Requested by:</Text>
+                        <Text style={[styles.requesterName, { color: theme.text }]}>
+                          {typeof delivery.requestedBy === "object"
+                            ? delivery.requestedBy?.name
+                            : "Student"}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: "#10b98120" }]}>
+                        <Text style={{ color: "#10b981", fontWeight: "700", fontSize: 12 }}>✓ Done</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.feeBadgeRow, { backgroundColor: theme.primary + "15" }]}>
+                      <Ionicons name="wallet" size={16} color={theme.primary} />
+                      <Text style={[styles.feeText, { color: theme.primary }]}>₹{delivery.fee}</Text>
+                    </View>
+
+                    {!delivery.requesterRating ||
+                    !delivery.requesterRating?.rating ? (
                       <Pressable
                         onPress={() => handleRateDelivery(delivery)}
                         style={[
@@ -359,17 +419,17 @@ export default function ActivityScreen() {
                             marginLeft: 8,
                           }}
                         >
-                          Rate Deliverer
+                          Rate Requester
                         </Text>
                       </Pressable>
                     ) : (
                       <Text
                         style={[
                           styles.subtext,
-                          { color: theme.subtext, marginTop: 8 },
+                          { color: "#10b981", marginTop: 8, fontWeight: "600" },
                         ]}
                       >
-                        ⭐ Rated {delivery.delivererRating.rating}/5
+                        ⭐ Rated {delivery.requesterRating.rating}/5
                       </Text>
                     )}
                   </Card>
@@ -384,7 +444,7 @@ export default function ActivityScreen() {
             <Text style={[styles.modeTitle, { color: theme.text, marginBottom: 12 }]}>
               Pending Requests
             </Text>
-            {allDeliveries.filter((r) => r.status === "OPEN").length === 0 ? (
+            {allRequests.filter((r) => r.status === "OPEN").length === 0 ? (
               <Card>
                 <Text
                   style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
@@ -393,7 +453,7 @@ export default function ActivityScreen() {
                 </Text>
               </Card>
             ) : (
-              allDeliveries
+              allRequests
                 .filter((r) => r.status === "OPEN")
                 .map((request) => (
                   <Card key={request._id}>
@@ -424,13 +484,29 @@ export default function ActivityScreen() {
                     <View style={styles.actions}>
                       <Pressable
                         onPress={() => {
-                          setEditingId(request._id);
-                          setEditItem(request.itemDescription);
-                          setEditOutlet(
-                            typeof request.outlet === "object"
-                              ? request.outlet?.name
-                              : request.outlet
-                          );
+                          const outletName = typeof request.outlet === "object"
+                            ? request.outlet?.name
+                            : request.outlet;
+                          // Determine if it's a standard outlet or custom
+                          let outlet: string;
+                          let customOutlet: string = "";
+                          if (["ANC 1", "ANC 2", "CP"].includes(outletName)) {
+                            outlet = outletName;
+                          } else {
+                            outlet = "Other";
+                            customOutlet = outletName;
+                          }
+                          router.push({
+                            pathname: "/edit/[id]",
+                            params: {
+                              id: request._id,
+                              item: request.itemDescription,
+                              outlet: outlet,
+                              hostel: request.hostel,
+                              fee: String(request.fee),
+                              customOutlet: customOutlet
+                            }
+                          });
                         }}
                         style={[
                           styles.smallButton,
@@ -458,8 +534,7 @@ export default function ActivityScreen() {
             >
               Accepted Requests
             </Text>
-            {allDeliveries.filter((r) => r.status === "IN_PROGRESS").length ===
-              0 ? (
+            {allRequests.filter((r) => r.status === "IN_PROGRESS" || r.status === "COMPLETED").length === 0 ? (
               <Card>
                 <Text
                   style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
@@ -468,9 +543,147 @@ export default function ActivityScreen() {
                 </Text>
               </Card>
             ) : (
-              allDeliveries
-                .filter((r) => r.status === "IN_PROGRESS")
-                .map((request) => (
+              <>
+                {allRequests
+                  .filter((r) => r.status === "IN_PROGRESS")
+                  .map((request) => (
+                    <Card key={request._id}>
+                      <View style={styles.header}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.item, { color: theme.text }]}>
+                            {request.itemDescription}
+                          </Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 4 }}>
+                            <Text style={[styles.subtext, { color: theme.subtext }]}>
+                              By{" "}
+                              {typeof request.acceptedBy === "object"
+                                ? request.acceptedBy?.name
+                                : "User"}
+                            </Text>
+                            {typeof request.acceptedBy === "object" && request.acceptedBy?.phone && (
+                              <Text style={[styles.subtext, { color: theme.primary, fontWeight: "600" }]}>
+                                • {request.acceptedBy.phone}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        <View
+                          style={[
+                            styles.feeBadge,
+                            { backgroundColor: "#f59e0b20" },
+                          ]}
+                        >
+                          <Text style={[styles.fee, { color: "#f59e0b" }]}>
+                            In Progress
+                          </Text>
+                        </View>
+                      </View>
+                    </Card>
+                  ))}
+                {allRequests.filter((r) => r.status === "COMPLETED").length > 0 && (
+                  <>
+                    <Text
+                      style={[
+                        styles.modeTitle,
+                        { color: theme.text, marginBottom: 12, marginTop: 16 },
+                      ]}
+                    >
+                      Completed
+                    </Text>
+                    {allRequests
+                      .filter((r) => r.status === "COMPLETED")
+                      .map((request) => (
+                        <Card key={request._id}>
+                          <View style={styles.header}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.item, { color: theme.text }]}>
+                                {request.itemDescription}
+                              </Text>
+                              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 4 }}>
+                                <Text style={[styles.subtext, { color: theme.subtext }]}>
+                                  By{" "}
+                                  {typeof request.acceptedBy === "object"
+                                    ? request.acceptedBy?.name
+                                    : "User"}
+                                </Text>
+                                {typeof request.acceptedBy === "object" && request.acceptedBy?.phone && (
+                                  <Text style={[styles.subtext, { color: theme.primary, fontWeight: "600" }]}>
+                                    • {request.acceptedBy.phone}
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                            <View
+                              style={[
+                                styles.feeBadge,
+                                { backgroundColor: "#10b98120" },
+                              ]}
+                            >
+                              <Text style={[styles.fee, { color: "#10b981" }]}>
+                                ✓ Done
+                              </Text>
+                            </View>
+                          </View>
+
+                          {!request.delivererRating ||
+                          !request.delivererRating?.rating ? (
+                            <Pressable
+                              onPress={() => handleRateDelivery(request)}
+                              style={[
+                                styles.button,
+                                { backgroundColor: theme.primary, marginTop: 12 },
+                              ]}
+                            >
+                              <Ionicons name="star" size={16} color="#fff" />
+                              <Text
+                                style={{
+                                  color: "#fff",
+                                  fontWeight: "600",
+                                  marginLeft: 8,
+                                }}
+                              >
+                                Rate Deliverer
+                              </Text>
+                            </Pressable>
+                          ) : (
+                            <Text
+                              style={[
+                                styles.subtext,
+                                { color: theme.subtext, marginTop: 8 },
+                              ]}
+                            >
+                              ⭐ Rated {request.delivererRating.rating}/5
+                            </Text>
+                          )}
+                        </Card>
+                      ))}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* UNACCEPTED REQUESTS SECTION */}
+            {unacceptedRequests.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.modeTitle,
+                    { color: theme.text, marginBottom: 12, marginTop: 20 },
+                  ]}
+                >
+                  Unaccepted Requests
+                </Text>
+                <Card>
+                  <Text
+                    style={[
+                      styles.subtext,
+                      { color: theme.subtext, marginBottom: 12, fontSize: 12 },
+                    ]}
+                  >
+                    These requests weren&apos;t accepted within 24 hours after posting
+                  </Text>
+                </Card>
+                {unacceptedRequests.map((request) => (
                   <Card key={request._id}>
                     <View style={styles.header}>
                       <View style={{ flex: 1 }}>
@@ -478,30 +691,39 @@ export default function ActivityScreen() {
                           {request.itemDescription}
                         </Text>
                         <Text style={[styles.subtext, { color: theme.subtext }]}>
-                          By{" "}
-                          {typeof request.acceptedBy === "object"
-                            ? request.acceptedBy?.name
-                            : "User"}
+                          {typeof request.outlet === "object"
+                            ? request.outlet?.name
+                            : request.outlet}{" "}
+                          → {request.hostel}
                         </Text>
                       </View>
                       <View
                         style={[
                           styles.feeBadge,
-                          { backgroundColor: "#f59e0b20" },
+                          { backgroundColor: "#ef444420" },
                         ]}
                       >
-                        <Text style={[styles.fee, { color: "#f59e0b" }]}>
-                          In Progress
+                        <Text style={[styles.fee, { color: "#ef4444" }]}>
+                          ⏱ Expired
                         </Text>
                       </View>
                     </View>
+                    <Text
+                      style={{
+                        color: theme.subtext,
+                        fontSize: 11,
+                        marginTop: 8,
+                        fontStyle: "italic",
+                      }}
+                    >
+                      Posted: {new Date(request.createdAt).toLocaleDateString()}
+                    </Text>
                   </Card>
-                ))
+                ))}
+              </>
             )}
           </>
         )}
-
-        {/* AVAILABILITY MODE */}
         {mode === "availability" && (
           <>
             <Text style={[styles.modeTitle, { color: theme.text, marginBottom: 12 }]}>
@@ -546,6 +768,29 @@ export default function ActivityScreen() {
 
                     <View style={styles.actions}>
                       <Pressable
+                        onPress={() => {
+                          const outletName = typeof avail.outlet === "object"
+                            ? avail.outlet?.name
+                            : avail.outlet;
+                          const outletId = typeof avail.outlet === "object"
+                            ? avail.outlet?._id
+                            : avail.outlet;
+                          router.push({
+                            pathname: "/edit-availability/[id]",
+                            params: {
+                              id: avail._id,
+                              itemName: avail.itemName,
+                              outletName,
+                              outletId,
+                              outletsList: JSON.stringify(outletsList)
+                            }
+                          });
+                        }}
+                        style={[styles.smallButton, { backgroundColor: theme.primary }]}
+                      >
+                        <Ionicons name="pencil" size={16} color="#fff" />
+                      </Pressable>
+                      <Pressable
                         onPress={() => handleDeleteAvailability(avail._id)}
                         style={[styles.smallButton, { backgroundColor: "#ef4444" }]}
                       >
@@ -564,7 +809,7 @@ export default function ActivityScreen() {
             >
               Responded Checks
             </Text>
-            {allAvailabilities.filter((a) => a.status === "CONFIRMED").length ===
+            {allAvailabilities.filter((a) => a.status === "CONFIRMED" && new Date(a.expiresAt) > new Date()).length ===
               0 ? (
               <Card>
                 <Text
@@ -575,7 +820,7 @@ export default function ActivityScreen() {
               </Card>
             ) : (
               allAvailabilities
-                .filter((a) => a.status === "CONFIRMED")
+                .filter((a) => a.status === "CONFIRMED" && new Date(a.expiresAt) > new Date())
                 .map((avail) => (
                   <Card key={avail._id}>
                     <View style={styles.header}>
@@ -819,5 +1064,110 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 6,
     alignItems: "center",
+  },
+  row: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+    marginVertical: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  selectedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 8,
+  },
+  dropdown: {
+    borderWidth: 1,
+    borderRadius: 8,
+    maxHeight: 200,
+    marginVertical: 8,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  outletDesc: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  deliveryItemHeader: {
+    marginBottom: 12,
+  },
+  routeContainer: {
+    backgroundColor: "rgba(0,0,0,0.02)",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  routeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  routeLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    width: 50,
+  },
+  routeValue: {
+    fontSize: 13,
+    fontWeight: "500",
+    flex: 1,
+  },
+  feeBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  feeText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  requesterCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  requesterLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  requesterName: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  phoneText: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
 });

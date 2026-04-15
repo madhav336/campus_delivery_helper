@@ -7,6 +7,30 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const router = express.Router();
 
 /**
+ * POST /api/outlets/cleanup
+ * Delete orphaned outlet owners
+ */
+router.post('/cleanup', async (req, res) => {
+  try {
+    // Find all outlet owners without a valid outlet
+    const orphanedOwners = await User.deleteMany({
+      role: 'outlet_owner',
+      $or: [
+        { outletId: null },
+        { outletId: undefined }
+      ]
+    });
+
+    res.json({
+      message: `Deleted ${orphanedOwners.deletedCount} orphaned outlet owners`,
+      deletedCount: orphanedOwners.deletedCount
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+/**
  * GET /api/outlets
  * Get all outlets with stats
  */
@@ -101,21 +125,45 @@ router.post('/', verifyToken, requireRole('admin'), async (req, res) => {
 
 /**
  * PUT /api/outlets/:id
- * Update outlet (admin only)
+ * Update outlet and/or outlet owner (admin only)
+ * Body can include: name, locationDescription, ownerId, ownerName, ownerEmail, ownerPhone, ownerPassword
  */
 router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const { name, locationDescription, ownerId } = req.body;
+    const bcrypt = require('bcryptjs');
+    const { name, locationDescription, ownerId, ownerName, ownerEmail, ownerPhone, ownerPassword } = req.body;
     const updateData = {};
 
     if (name) updateData.name = name;
     if (locationDescription) updateData.locationDescription = locationDescription;
+
+    // Handle owner change or update
+    let targetOwnerId = ownerId;
     if (ownerId) {
       const owner = await User.findById(ownerId);
       if (!owner || owner.role !== 'outlet_owner') {
         return res.status(400).json({ message: 'Invalid owner or owner is not an outlet owner' });
       }
       updateData.owner = ownerId;
+      targetOwnerId = ownerId;
+    } else {
+      // If no ownerId provided, use existing outlet's owner
+      const existingOutlet = await Outlet.findById(req.params.id);
+      targetOwnerId = existingOutlet?.owner?._id || null;
+    }
+
+    // Update owner details if provided
+    if (targetOwnerId && (ownerName || ownerEmail || ownerPhone || ownerPassword)) {
+      const ownerUpdateData = {};
+      if (ownerName) ownerUpdateData.name = ownerName;
+      if (ownerEmail) ownerUpdateData.email = ownerEmail.toLowerCase();
+      if (ownerPhone) ownerUpdateData.phone = ownerPhone;
+      if (ownerPassword) {
+        const salt = await bcrypt.genSalt(10);
+        ownerUpdateData.password = await bcrypt.hash(ownerPassword, salt);
+      }
+
+      await User.findByIdAndUpdate(targetOwnerId, ownerUpdateData);
     }
 
     const outlet = await Outlet.findByIdAndUpdate(
@@ -128,7 +176,7 @@ router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Outlet not found' });
     }
 
-    res.json({ message: 'Outlet updated', outlet });
+    res.json({ message: 'Outlet and owner updated', outlet });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -136,7 +184,7 @@ router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
 
 /**
  * DELETE /api/outlets/:id
- * Delete outlet (admin only)
+ * Delete outlet and cascade delete the outlet owner (admin only)
  */
 router.delete('/:id', verifyToken, requireRole('admin'), async (req, res) => {
   try {
@@ -146,14 +194,15 @@ router.delete('/:id', verifyToken, requireRole('admin'), async (req, res) => {
       return res.status(404).json({ message: 'Outlet not found' });
     }
 
-    // Clear the owner's outletId reference
+    // Delete the outlet owner (cascade delete)
     if (outlet.owner) {
-      await User.updateOne({ _id: outlet.owner }, { $set: { outletId: null } });
+      await User.deleteOne({ _id: outlet.owner });
     }
 
+    // Delete the outlet
     await Outlet.findByIdAndDelete(req.params.id);
 
-    res.json({ message: 'Outlet deleted successfully' });
+    res.json({ message: 'Outlet and owner deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

@@ -9,9 +9,10 @@ import {
   TextInput,
   ScrollView,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { outlets, users } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import Card from "@/components/ui/Card";
@@ -21,27 +22,56 @@ import { Ionicons } from "@expo/vector-icons";
 export default function OutletsScreen() {
   const { theme } = useTheme();
   const [outletsList, setOutletsList] = useState<any[]>([]);
+  const [filteredOutlets, setFilteredOutlets] = useState<any[]>([]);
   const [outletOwners, setOutletOwners] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showOwnerDropdown, setShowOwnerDropdown] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchOutlets();
+    setRefreshing(false);
+  }, []);
   
   // Form state
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [selectedOwner, setSelectedOwner] = useState<any>(null);
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
 
   useEffect(() => {
     fetchOutlets();
     fetchOutletOwners();
   }, []);
 
+  useEffect(() => {
+    const query = searchQuery.toLowerCase();
+    if (!query.trim()) {
+      setFilteredOutlets(outletsList);
+    } else {
+      setFilteredOutlets(
+        outletsList.filter((outlet) =>
+          outlet.name?.toLowerCase().includes(query) ||
+          outlet.locationDescription?.toLowerCase().includes(query) ||
+          outlet.owner?.name?.toLowerCase().includes(query)
+        )
+      );
+    }
+  }, [searchQuery, outletsList]);
+
   const fetchOutlets = async () => {
     try {
       setLoading(true);
       const data = await outlets.getAll();
       setOutletsList(data);
+      setFilteredOutlets(data);
     } catch (error) {
       Alert.alert("Error", "Failed to fetch outlets");
     } finally {
@@ -58,31 +88,17 @@ export default function OutletsScreen() {
     }
   };
 
-  const handleCreate = async () => {
-    if (!name.trim() || !location.trim() || !selectedOwner) {
-      Alert.alert("Validation", "Please fill in all fields and select an owner");
-      return;
-    }
-
-    try {
-      await outlets.create(name, location, selectedOwner._id);
-      Alert.alert("Success", "Outlet created and linked to owner! ✅");
-      setName("");
-      setLocation("");
-      setSelectedOwner(null);
-      setShowForm(false);
-      fetchOutlets();
-    } catch (error) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to create outlet");
-      console.error(error);
-    }
-  };
-
   const handleEdit = (outlet: any) => {
     setEditingId(outlet._id);
     setName(outlet.name);
     setLocation(outlet.locationDescription);
     setSelectedOwner(outlet.owner || null);
+    if (outlet.owner) {
+      setOwnerName(outlet.owner.name || "");
+      setOwnerEmail(outlet.owner.email || "");
+      setOwnerPhone(outlet.owner.phone || "");
+    }
+    setOwnerPassword(""); // Don't pre-fill password
     setShowForm(true);
   };
 
@@ -93,11 +109,27 @@ export default function OutletsScreen() {
     }
 
     try {
-      await outlets.update(editingId, name, location, selectedOwner._id);
-      Alert.alert("Success", "Outlet updated! ✅");
+      const updatePayload: any = {
+        name,
+        locationDescription: location,
+        ownerId: selectedOwner._id || selectedOwner.id
+      };
+
+      // Add owner details if they've been modified
+      if (ownerName?.trim()) updatePayload.ownerName = ownerName;
+      if (ownerEmail?.trim()) updatePayload.ownerEmail = ownerEmail;
+      if (ownerPhone?.trim()) updatePayload.ownerPhone = ownerPhone;
+      if (ownerPassword?.trim()) updatePayload.ownerPassword = ownerPassword;
+
+      await outlets.update(editingId, updatePayload);
+      Alert.alert("Success", "Outlet and owner updated! ✅");
       setName("");
       setLocation("");
       setSelectedOwner(null);
+      setOwnerName("");
+      setOwnerEmail("");
+      setOwnerPhone("");
+      setOwnerPassword("");
       setEditingId(null);
       setShowForm(false);
       fetchOutlets();
@@ -133,6 +165,10 @@ export default function OutletsScreen() {
     setName("");
     setLocation("");
     setSelectedOwner(null);
+    setOwnerName("");
+    setOwnerEmail("");
+    setOwnerPhone("");
+    setOwnerPassword("");
     setShowOwnerDropdown(false);
   };
 
@@ -141,20 +177,20 @@ export default function OutletsScreen() {
       <View style={styles.container}>
         <TopBar title="Outlets (Admin)" />
 
-        {/* CREATE BUTTON */}
-        <Pressable
-          onPress={() => {
-            setEditingId(null);
-            setName("");
-            setLocation("");
-            setSelectedOwner(null);
-            setShowForm(true);
-          }}
-          style={[styles.createButton, { backgroundColor: theme.primary }]}
-        >
-          <Ionicons name="add-circle" size={20} color="#fff" />
-          <Text style={styles.createButtonText}>New Outlet</Text>
-        </Pressable>
+        <Card>
+          <Text style={[styles.searchTitle, { color: theme.text }]}>Search Outlets</Text>
+          <TextInput
+            placeholder="Search by name, location, or owner"
+            placeholderTextColor={theme.subtext}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={[
+              styles.searchInput,
+              { borderColor: theme.border, color: theme.text, backgroundColor: theme.bg },
+            ]}
+          />
+          <Text style={[styles.countText, { color: theme.subtext }]}>Showing {filteredOutlets.length} outlets</Text>
+        </Card>
 
         {loading ? (
           <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -162,12 +198,13 @@ export default function OutletsScreen() {
           </View>
         ) : (
           <FlatList
-            data={outletsList}
+            data={filteredOutlets}
             keyExtractor={(item) => item._id}
             contentContainerStyle={{ paddingBottom: 120 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
             ListEmptyComponent={
               <Text style={{ textAlign: "center", color: theme.subtext, marginTop: 20 }}>
-                No outlets available
+                No outlets found
               </Text>
             }
             renderItem={({ item }) => (
@@ -222,7 +259,7 @@ export default function OutletsScreen() {
             >
               <View style={styles.formHeader}>
                 <Text style={[styles.formTitle, { color: theme.text }]}>
-                  {editingId ? "Edit Outlet" : "Create New Outlet"}
+                  Edit Outlet
                 </Text>
                 <Pressable onPress={closeForm}>
                   <Ionicons name="close" size={24} color={theme.text} />
@@ -315,6 +352,81 @@ export default function OutletsScreen() {
                   </ScrollView>
                 )}
 
+                {selectedOwner && (
+                  <>
+                    <Text style={[styles.label, { color: theme.text, marginTop: 16 }]}>
+                      Owner Details
+                    </Text>
+
+                    <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Owner Name</Text>
+                    <TextInput
+                      placeholder={selectedOwner.name || "Name"}
+                      placeholderTextColor={theme.subtext}
+                      value={ownerName}
+                      onChangeText={setOwnerName}
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+
+                    <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Email</Text>
+                    <TextInput
+                      placeholder={selectedOwner.email || "Email"}
+                      placeholderTextColor={theme.subtext}
+                      value={ownerEmail}
+                      onChangeText={setOwnerEmail}
+                      keyboardType="email-address"
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+
+                    <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>Phone</Text>
+                    <TextInput
+                      placeholder={selectedOwner.phone || "Phone"}
+                      placeholderTextColor={theme.subtext}
+                      value={ownerPhone}
+                      onChangeText={setOwnerPhone}
+                      keyboardType="phone-pad"
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+
+                    <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>New Password (optional)</Text>
+                    <TextInput
+                      placeholder="Leave blank to keep current"
+                      placeholderTextColor={theme.subtext}
+                      value={ownerPassword}
+                      onChangeText={setOwnerPassword}
+                      secureTextEntry
+                      style={[
+                        styles.input,
+                        {
+                          color: theme.text,
+                          borderColor: theme.border,
+                          backgroundColor: theme.bg,
+                        },
+                      ]}
+                    />
+                  </>
+                )}
+
                 <View style={styles.buttonRow}>
                   <Pressable
                     onPress={closeForm}
@@ -323,14 +435,14 @@ export default function OutletsScreen() {
                     <Text style={styles.buttonText}>Cancel</Text>
                   </Pressable>
                   <Pressable
-                    onPress={editingId ? handleUpdate : handleCreate}
+                    onPress={handleUpdate}
                     style={[
                       styles.button,
                       { flex: 1, backgroundColor: theme.primary, marginLeft: 8 },
                     ]}
                   >
                     <Text style={[styles.buttonText, { color: "#fff" }]}>
-                      {editingId ? "Update" : "Create"}
+                      Update
                     </Text>
                   </Pressable>
                 </View>
@@ -348,22 +460,22 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
-  
-  createButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
+
+  searchTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 8,
   },
 
-  createButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+
+  countText: {
+    fontSize: 12,
   },
 
   outletCard: {

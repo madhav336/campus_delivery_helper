@@ -73,19 +73,49 @@ async function logDailyStats() {
 }
 
 /**
- * Delete expired availability requests (older than their expiresAt timestamp)
+ * Archive expired availability requests (keep for analytics, hide from interface)
+ * Requests with expiresAt <= now are kept in DB but filtered out in all API responses
  */
 async function cleanupExpiredAvailabilities() {
   try {
     const now = new Date();
-    const result = await AvailabilityRequest.deleteMany({
+    // Just log analytics - we keep expired requests in DB indefinitely for analytics
+    const expiredCount = await AvailabilityRequest.countDocuments({
       expiresAt: { $lte: now }
     });
 
-    console.log(`✅ Cleaned up ${result.deletedCount} expired availability requests`);
+    console.log(`📊 Archived ${expiredCount} expired availability requests (kept for analytics)`);
   } catch (error) {
-    console.error('Error cleaning up availability requests:', error);
+    console.error('Error archiving availability requests:', error);
   }
 }
 
-module.exports = { logDailyStats, cleanupExpiredAvailabilities };
+/**
+ * Mark delivery requests as expired pending if they've been OPEN for more than 24 hours
+ * These are kept in DB for analytics but hidden from main requests list
+ */
+async function markExpiredPendingDeliveries() {
+  try {
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+    const result = await DeliveryRequest.updateMany(
+      {
+        status: 'OPEN',
+        isExpiredPending: false,
+        createdAt: { $lt: twentyFourHoursAgo }
+      },
+      {
+        isExpiredPending: true
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(`📌 Marked ${result.modifiedCount} delivery requests as expired pending`);
+    }
+  } catch (error) {
+    console.error('Error marking expired pending deliveries:', error);
+  }
+}
+
+module.exports = { logDailyStats, cleanupExpiredAvailabilities, markExpiredPendingDeliveries };

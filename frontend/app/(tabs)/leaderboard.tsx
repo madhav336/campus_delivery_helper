@@ -3,9 +3,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState } from "react";
@@ -16,18 +16,24 @@ import Card from "@/components/ui/Card";
 import { Ionicons } from "@expo/vector-icons";
 
 interface LeaderboardEntry {
-  _id: string;
-  email: string;
-  requesterRating: number;
-  delivererRating: number;
-  completedDeliveries: number;
-  role: string;
+  id: string;
+  name: string;
+  rating: number;
+}
+
+interface LeaderboardResponse {
+  topDeliverers: LeaderboardEntry[];
+  topRequesters: LeaderboardEntry[];
 }
 
 export default function LeaderboardScreen() {
   const { theme } = useTheme();
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse>({
+    topDeliverers: [],
+    topRequesters: [],
+  });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"requesters" | "deliverers">("requesters");
 
   useEffect(() => {
@@ -37,49 +43,37 @@ export default function LeaderboardScreen() {
   const loadLeaderboard = async () => {
     try {
       const data = await analytics.getLeaderboard();
-      setLeaderboard(data);
-    } catch (error) {
+      setLeaderboard({
+        topDeliverers: data?.topDeliverers || [],
+        topRequesters: data?.topRequesters || [],
+      });
+    } catch {
       Alert.alert("Error", "Failed to load leaderboard");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const sortedByRequesters = [...leaderboard].sort(
-    (a, b) => (b.requesterRating || 0) - (a.requesterRating || 0)
-  );
-
-  const sortedByDeliverers = [...leaderboard].sort(
-    (a, b) => (b.delivererRating || 0) - (a.delivererRating || 0)
-  );
-
-  const renderRow = (
-    item: LeaderboardEntry,
-    index: number,
-    isRequester: boolean
-  ) => {
-    const rating = isRequester ? item.requesterRating : item.delivererRating;
+  const renderRow = (item: LeaderboardEntry, index: number) => {
     const medal =
       index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`;
 
     return (
-      <Card key={item._id}>
+      <Card key={item.id}>
         <View style={styles.row}>
           <Text style={[styles.medal, { color: theme.primary }]}>
             {medal}
           </Text>
           <View style={{ flex: 1 }}>
             <Text style={[styles.name, { color: theme.text }]}>
-              {item.email.split("@")[0]}
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.subtext }]}>
-              {item.role?.replace("_", " ").toUpperCase() || "Student"}
+              {item.name || "Student"}
             </Text>
           </View>
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={16} color={theme.primary} />
             <Text style={[styles.rating, { color: theme.text }]}>
-              {(rating || 0).toFixed(1)}
+              {(item.rating || 0).toFixed(1)}
             </Text>
           </View>
         </View>
@@ -139,13 +133,25 @@ export default function LeaderboardScreen() {
       </View>
 
       {/* LIST */}
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadLeaderboard();
+            }}
+            tintColor={theme.primary}
+          />
+        }
+      >
         {activeTab === "requesters"
-          ? sortedByRequesters.map((item, index) =>
-              renderRow(item, index, true)
+          ? leaderboard.topRequesters.map((item, index) =>
+              renderRow(item, index)
             )
-          : sortedByDeliverers.map((item, index) =>
-              renderRow(item, index, false)
+          : leaderboard.topDeliverers.map((item, index) =>
+              renderRow(item, index)
             )}
       </ScrollView>
     </SafeAreaView>
@@ -198,5 +204,10 @@ const styles = StyleSheet.create({
   rating: {
     fontSize: 14,
     fontWeight: "700",
-  },
-});
+  },  searchInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+  },});

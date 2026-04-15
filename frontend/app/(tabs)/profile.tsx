@@ -7,9 +7,10 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "expo-router";
 import { users, auth } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
@@ -26,6 +27,13 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState("");
   const [hostel, setHostel] = useState("");
   const [editing, setEditing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
+  }, []);
 
   useEffect(() => {
     loadProfile();
@@ -119,7 +127,10 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <TopBar title="Profile" />
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
         {/* PROFILE CARD */}
         <Card>
           <View style={styles.profileHeader}>
@@ -185,14 +196,29 @@ export default function ProfileScreen() {
                   {phone || "Not set"}
                 </Text>
               </View>
-              <View style={styles.infoRow}>
-                <Text style={[styles.label, { color: theme.subtext }]}>
-                  {userRole === "student" ? "Hostel" : "Outlet"}
-                </Text>
-                <Text style={[styles.value, { color: theme.text }]}>
-                  {hostel || "Not set"}
-                </Text>
-              </View>
+
+              {userRole === "student" && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.label, { color: theme.subtext }]}>
+                    Hostel
+                  </Text>
+                  <Text style={[styles.value, { color: theme.text }]}>
+                    {hostel || "Not set"}
+                  </Text>
+                </View>
+              )}
+
+              {userRole === "outlet_owner" && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.label, { color: theme.subtext }]}>
+                    Outlet
+                  </Text>
+                  <Text style={[styles.value, { color: theme.text }]}>
+                    {profile?.outlet?.name || "Not set"}
+                  </Text>
+                </View>
+              )}
+
               <Pressable
                 onPress={() => setEditing(true)}
                 style={[styles.editButton, { backgroundColor: theme.primary }]}
@@ -221,23 +247,27 @@ export default function ProfileScreen() {
                 ]}
               />
 
-              <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                {userRole === "student" ? "Hostel" : "Outlet"}
-              </Text>
-              <TextInput
-                value={hostel}
-                onChangeText={setHostel}
-                placeholder="Enter details"
-                placeholderTextColor={theme.subtext}
-                style={[
-                  styles.input,
-                  {
-                    color: theme.text,
-                    borderColor: theme.border,
-                    backgroundColor: theme.bg,
-                  },
-                ]}
-              />
+              {userRole === "student" && (
+                <>
+                  <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
+                    Hostel
+                  </Text>
+                  <TextInput
+                    value={hostel}
+                    onChangeText={setHostel}
+                    placeholder="Enter hostel"
+                    placeholderTextColor={theme.subtext}
+                    style={[
+                      styles.input,
+                      {
+                        color: theme.text,
+                        borderColor: theme.border,
+                        backgroundColor: theme.bg,
+                      },
+                    ]}
+                  />
+                </>
+              )}
 
               <View style={styles.buttonRow}>
                 <Pressable

@@ -6,74 +6,243 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Svg, { Circle, Line, Path } from "react-native-svg";
 import { analytics } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
 import { Ionicons } from "@expo/vector-icons";
 
-interface AnalyticsSummary {
-  totalUsers: number;
-  totalRequests: number;
-  completedRequests: number;
-  avgRequestFee: number;
-}
-
-interface Trend {
+type TrendPoint = {
   date: string;
-  count: number;
-}
+  deliveryCreated: number;
+  availabilityCreated: number;
+  availabilityResponded: number;
+  completed: number;
+  newUsers: number;
+};
 
-interface ApiUsage {
-  endpoint: string;
-  method: string;
-  count: number;
-}
+type LeaderboardUser = {
+  id: string;
+  name: string;
+  rating: number;
+};
+
+type DashboardData = {
+  summary: {
+    totalUsers: number;
+    totalOutlets: number;
+    totalDeliveryRequests: number;
+    totalAvailabilityRequests: number;
+    completedDeliveries: number;
+    completionRate: number;
+    avgRating: number;
+    avgDelivererRating: number;
+    avgRequesterRating: number;
+    today: {
+      newUsers: number;
+      deliveryRequests: number;
+      availabilityRequests: number;
+    };
+    roleDistribution: {
+      student: number;
+      outlet_owner: number;
+      admin: number;
+    };
+  };
+  trends: TrendPoint[];
+  leaderboard: {
+    topDeliverers: LeaderboardUser[];
+    topRequesters: LeaderboardUser[];
+  };
+  outletPerformance: any[];
+  apiUsage: any[];
+};
+
+const DAY_OPTIONS = [7, 14, 30];
 
 export default function AnalyticsScreen() {
   const { theme } = useTheme();
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [requestsTrend, setRequestsTrend] = useState<Trend[]>([]);
-  const [usersTrend, setUsersTrend] = useState<Trend[]>([]);
-  const [apiUsage, setApiUsage] = useState<ApiUsage[]>([]);
+  const [days, setDays] = useState<number>(14);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"summary" | "trends" | "api">(
-    "summary"
-  );
+  const [refreshing, setRefreshing] = useState(false);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [delivererSearch, setDelivererSearch] = useState("");
+  const [requesterSearch, setRequesterSearch] = useState("");
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
+  }, [loadDashboard]);
 
-  const loadAnalytics = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      const [summaryData, reqTrend, userTrend, apiData] = await Promise.all([
-        analytics.getSummary(),
-        analytics.getRequestsTrend(30),
-        analytics.getUsersTrend(30),
-        analytics.getApiUsage(),
-      ]);
-      setSummary(summaryData);
-      setRequestsTrend(reqTrend);
-      setUsersTrend(userTrend);
-      setApiUsage(apiData);
-    } catch (error) {
-      Alert.alert("Error", "Failed to load analytics");
+      const data = await analytics.getDashboard(days);
+      setDashboard(data);
+    } catch {
+      Alert.alert("Error", "Failed to load analytics dashboard");
     } finally {
       setLoading(false);
     }
+  }, [days]);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
+
+  const trendPoints = useMemo(() => {
+    if (!dashboard) return [];
+    return dashboard.trends.map((point) => ({
+      ...point,
+      total:
+        point.deliveryCreated +
+        point.availabilityCreated +
+        point.completed +
+        point.newUsers,
+    }));
+  }, [dashboard]);
+
+  const TrendLineChart = ({ data, color, maxValue, width = 280 }: { data: number[]; color: string; maxValue: number; width?: number }) => {
+    const height = 80;
+    const padding = 8;
+
+    if (data.length === 0) return <Text style={{ color: theme.subtext }}>No data</Text>;
+
+    const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
+    const dots = data.map((val, i) => ({
+      x: padding + stepX * i,
+      y: height - padding - (val / Math.max(maxValue, 1)) * (height - padding * 2),
+    }));
+
+    const path = dots.map((dot, i) => `${i === 0 ? "M" : "L"}${dot.x.toFixed(0)},${dot.y.toFixed(0)}`).join(" ");
+
+    return (
+      <Svg width={width} height={height}>
+        <Line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke={theme.border} strokeWidth={1} />
+        <Path d={path} stroke={color} strokeWidth={2} fill="none" />
+        {dots.map((dot, i) => (
+          <Circle key={i} cx={dot.x} cy={dot.y} r={2} fill={color} />
+        ))}
+      </Svg>
+    );
+  };
+
+  const CurrentDayPie = () => {
+    if (!dashboard) return null;
+    const delivery = dashboard.summary.today.deliveryRequests;
+    const availability = dashboard.summary.today.availabilityRequests;
+    const total = delivery + availability;
+
+    if (total === 0) {
+      return <Text style={{ color: theme.subtext, textAlign: "center", marginVertical: 20 }}>No requests today</Text>;
+    }
+
+    const deliveryPercent = (delivery / total) * 100;
+    const radius = 45;
+    const center = 60;
+    const circumference = 2 * Math.PI * radius;
+
+    return (
+      <View style={{ alignItems: "center", marginVertical: 16 }}>
+        <View style={{ width: 140, height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
+          <Svg width={140} height={140} style={{ position: "absolute" }}>
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="#4f46e5"
+              strokeWidth={18}
+              strokeDasharray={`${(deliveryPercent / 100) * circumference} ${circumference}`}
+              transform={`rotate(-90 ${center} ${center})`}
+            />
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="#10b981"
+              strokeWidth={18}
+              strokeDasharray={`${((100 - deliveryPercent) / 100) * circumference} ${circumference}`}
+              strokeDashoffset={-((deliveryPercent / 100) * circumference)}
+              transform={`rotate(-90 ${center} ${center})`}
+            />
+          </Svg>
+        </View>
+      </View>
+    );
+  };
+
+  const RoleDistributionPie = () => {
+    if (!dashboard) return null;
+    const students = dashboard.summary.roleDistribution.student;
+    const outlets = dashboard.summary.roleDistribution.outlet_owner;
+    const total = students + outlets;
+
+    if (total === 0) {
+      return <Text style={{ color: theme.subtext, textAlign: "center", marginVertical: 20 }}>No users</Text>;
+    }
+
+    const studentPercent = (students / total) * 100;
+    const radius = 45;
+    const center = 60;
+    const circumference = 2 * Math.PI * radius;
+
+    return (
+      <View style={{ alignItems: "center", marginVertical: 16 }}>
+        <View style={{ width: 140, height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
+          <Svg width={140} height={140} style={{ position: "absolute" }}>
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="#7c3aed"
+              strokeWidth={18}
+              strokeDasharray={`${(studentPercent / 100) * circumference} ${circumference}`}
+              transform={`rotate(-90 ${center} ${center})`}
+            />
+            <Circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth={18}
+              strokeDasharray={`${((100 - studentPercent) / 100) * circumference} ${circumference}`}
+              strokeDashoffset={-((studentPercent / 100) * circumference)}
+              transform={`rotate(-90 ${center} ${center})`}
+            />
+          </Svg>
+        </View>
+      </View>
+    );
   };
 
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
         <TopBar title="Analytics" />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" />
+        <View style={[styles.centered, { backgroundColor: theme.bg }]}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!dashboard) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+        <TopBar title="Analytics" />
+        <View style={[styles.centered, { backgroundColor: theme.bg }]}>
+          <Text style={{ color: theme.text }}>Failed to load analytics</Text>
         </View>
       </SafeAreaView>
     );
@@ -82,211 +251,326 @@ export default function AnalyticsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <TopBar title="Analytics" />
-
-      {/* TABS */}
-      <View
-        style={[
-          styles.tabContainer,
-          { borderBottomColor: theme.border, backgroundColor: theme.card },
-        ]}
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
       >
-        <View style={styles.tabInner}>
-          {["summary", "trends", "api"].map((tab) => (
-            <View
-              key={tab}
-              style={{
-                flex: 1,
-                alignItems: "center",
-                paddingVertical: 12,
-                borderBottomWidth: activeTab === tab ? 2 : 0,
-                borderBottomColor:
-                  activeTab === tab ? theme.primary : "transparent",
-              }}
-            >
-              <Text
-                onPress={() => setActiveTab(tab as any)}
-                style={[
-                  styles.tabText,
-                  {
-                    color: activeTab === tab ? theme.primary : theme.subtext,
-                  },
-                ]}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              </Text>
+        {/* KEY METRICS */}
+        <View style={styles.kpiGrid}>
+          <Card style={styles.kpiCard}>
+            <View style={[styles.kpiIcon, { backgroundColor: theme.primary + "20" }]}>
+              <Ionicons name="people" size={24} color={theme.primary} />
             </View>
-          ))}
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{dashboard.summary.totalUsers}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.subtext }]}>Users</Text>
+          </Card>
+          <Card style={styles.kpiCard}>
+            <View style={[styles.kpiIcon, { backgroundColor: "#10b98120" }]}>
+              <Ionicons name="storefront" size={24} color="#10b981" />
+            </View>
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{dashboard.summary.totalOutlets}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.subtext }]}>Outlets</Text>
+          </Card>
+          <Card style={styles.kpiCard}>
+            <View style={[styles.kpiIcon, { backgroundColor: "#f59e0b20" }]}>
+              <Ionicons name="checkmark-circle" size={24} color="#f59e0b" />
+            </View>
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{dashboard.summary.totalDeliveryRequests > 0 ? Math.round((dashboard.summary.completedDeliveries / dashboard.summary.totalDeliveryRequests) * 100) : 0}%</Text>
+            <Text style={[styles.kpiLabel, { color: theme.subtext }]}>Request Done</Text>
+          </Card>
+          <Card style={styles.kpiCard}>
+            <View style={[styles.kpiIcon, { backgroundColor: "#10b98120" }]}>
+              <Ionicons name="help-circle" size={24} color="#10b981" />
+            </View>
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{dashboard.summary.totalAvailabilityRequests > 0 ? Math.round((dashboard.trends.reduce((sum, t) => sum + t.availabilityResponded, 0) / dashboard.summary.totalAvailabilityRequests) * 100) : 0}%</Text>
+            <Text style={[styles.kpiLabel, { color: theme.subtext }]}>Availability Response</Text>
+          </Card>
         </View>
-      </View>
 
-      {/* CONTENT */}
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
-        {activeTab === "summary" && summary && (
-          <>
-            {/* STAT CARDS */}
-            <View style={styles.statsGrid}>
-              <Card style={{ flex: 1 }}>
-                <View style={styles.statCard}>
-                  <Ionicons name="people" size={24} color={theme.primary} />
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {summary.totalUsers}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.subtext }]}>
-                    Total Users
-                  </Text>
-                </View>
-              </Card>
-              <Card style={{ flex: 1 }}>
-                <View style={styles.statCard}>
-                  <Ionicons name="list" size={24} color={theme.primary} />
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {summary.totalRequests}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.subtext }]}>
-                    Total Requests
-                  </Text>
-                </View>
-              </Card>
+        {/* USER ROLE DISTRIBUTION PIE */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>User Distribution</Text>
+          <RoleDistributionPie />
+          <View style={styles.pieLegend}>
+            <View style={styles.pieLegendItem}>
+              <View style={[styles.pieLegendDot, { backgroundColor: "#7c3aed" }]} />
+              <Text style={{ color: theme.text }}>Students ({dashboard.summary.roleDistribution.student})</Text>
             </View>
-
-            <View style={styles.statsGrid}>
-              <Card style={{ flex: 1 }}>
-                <View style={styles.statCard}>
-                  <Ionicons name="checkmark-circle" size={24} color={theme.primary} />
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    {summary.completedRequests}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.subtext }]}>
-                    Completed
-                  </Text>
-                </View>
-              </Card>
-              <Card style={{ flex: 1 }}>
-                <View style={styles.statCard}>
-                  <Ionicons name="cash" size={24} color={theme.primary} />
-                  <Text style={[styles.statValue, { color: theme.text }]}>
-                    ₹{summary.avgRequestFee ? summary.avgRequestFee.toFixed(0) : "0"}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: theme.subtext }]}>
-                    Avg Fee
-                  </Text>
-                </View>
-              </Card>
+            <View style={styles.pieLegendItem}>
+              <View style={[styles.pieLegendDot, { backgroundColor: "#f59e0b" }]} />
+              <Text style={{ color: theme.text }}>Outlet Owners ({dashboard.summary.roleDistribution.outlet_owner})</Text>
             </View>
-          </>
-        )}
+          </View>
+        </Card>
 
-        {activeTab === "trends" && (
-          <>
-            {/* REQUESTS TREND */}
-            <Card>
-              <Text style={[styles.trendTitle, { color: theme.text }]}>
-                Requests Trend (30 days)
-              </Text>
-              {requestsTrend.length > 0 ? (
-                <View style={styles.trendList}>
-                  {requestsTrend.slice(-7).map((item, idx) => (
-                    <View key={idx} style={styles.trendItem}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.trendDate, { color: theme.subtext }]}>
-                          {new Date(item.date).toLocaleDateString()}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.trendBar,
-                          {
-                            width: `${Math.min(item.count * 10, 80)}%`,
-                            backgroundColor: theme.primary,
-                          },
-                        ]}
-                      />
-                      <Text
-                        style={[styles.trendCount, { color: theme.text, width: 30 }]}
-                      >
-                        {item.count}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ color: theme.subtext }}>No data available</Text>
-              )}
-            </Card>
+        {/* TODAY'S DELIVERY VS AVAILABILITY PIE */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Today&apos;s Request Mix</Text>
+          <CurrentDayPie />
+          <View style={styles.pieLegend}>
+            <View style={styles.pieLegendItem}>
+              <View style={[styles.pieLegendDot, { backgroundColor: "#4f46e5" }]} />
+              <Text style={{ color: theme.text }}>Deliveries ({dashboard.summary.today.deliveryRequests})</Text>
+            </View>
+            <View style={styles.pieLegendItem}>
+              <View style={[styles.pieLegendDot, { backgroundColor: "#10b981" }]} />
+              <Text style={{ color: theme.text }}>Availability ({dashboard.summary.today.availabilityRequests})</Text>
+            </View>
+          </View>
+        </Card>
 
-            {/* USERS TREND */}
-            <Card>
-              <Text style={[styles.trendTitle, { color: theme.text }]}>
-                Users Trend (30 days)
-              </Text>
-              {usersTrend.length > 0 ? (
-                <View style={styles.trendList}>
-                  {usersTrend.slice(-7).map((item, idx) => (
-                    <View key={idx} style={styles.trendItem}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.trendDate, { color: theme.subtext }]}>
-                          {new Date(item.date).toLocaleDateString()}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.trendBar,
-                          {
-                            width: `${Math.min(item.count * 10, 80)}%`,
-                            backgroundColor: theme.primary,
-                          },
-                        ]}
-                      />
-                      <Text
-                        style={[styles.trendCount, { color: theme.text, width: 30 }]}
-                      >
-                        {item.count}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ color: theme.subtext }}>No data available</Text>
-              )}
-            </Card>
-          </>
-        )}
-
-        {activeTab === "api" && apiUsage.length > 0 && (
-          <Card>
-            <Text style={[styles.trendTitle, { color: theme.text }]}>
-              API Usage
-            </Text>
-            <View style={styles.apiTable}>
-              {/* HEADER */}
-              <View style={[styles.apiRow, { backgroundColor: theme.bg }]}>
-                <Text style={[styles.apiHeader, { color: theme.subtext, flex: 2 }]}>
-                  Endpoint
-                </Text>
-                <Text style={[styles.apiHeader, { color: theme.subtext, flex: 1 }]}>
-                  Method
-                </Text>
-                <Text style={[styles.apiHeader, { color: theme.subtext, flex: 1 }]}>
-                  Calls
-                </Text>
-              </View>
-              {/* ROWS */}
-              {apiUsage.slice(0, 10).map((item, idx) => (
-                <View key={idx} style={[styles.apiRow, { borderTopColor: theme.border }]}>
-                  <Text style={[styles.apiCell, { color: theme.text, flex: 2 }]}>
-                    {item.endpoint.substring(0, 25)}...
+        {/* TRENDS SECTION WITH DAY SELECTOR */}
+        <Card>
+          <View style={styles.trendHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Trends</Text>
+            <View style={styles.daySelector}>
+              {DAY_OPTIONS.map((option) => (
+                <Pressable
+                  key={option}
+                  onPress={() => setDays(option)}
+                  style={[
+                    styles.dayChip,
+                    {
+                      backgroundColor: days === option ? theme.primary : theme.card,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: days === option ? "#fff" : theme.text, fontSize: 11, fontWeight: "700" }}>
+                    {option}d
                   </Text>
-                  <Text style={[styles.apiCell, { color: theme.subtext, flex: 1 }]}>
-                    {item.method}
-                  </Text>
-                  <Text style={[styles.apiCell, { color: theme.text, flex: 1, fontWeight: "700" }]}>
-                    {item.count}
-                  </Text>
-                </View>
+                </Pressable>
               ))}
             </View>
-          </Card>
-        )}
+          </View>
+        </Card>
+
+        {/* GRAPH 1: STUDENTS OVER TIME */}
+        <Card>
+          <Text style={[styles.graphTitle, { color: theme.text }]}>Students Over Time</Text>
+          {trendPoints.length > 0 ? (
+            <TrendLineChart
+              data={trendPoints.map((p) => p.newUsers)}
+              color="#4f46e5"
+              maxValue={Math.max(...trendPoints.map((p) => p.newUsers), 1)}
+            />
+          ) : (
+            <Text style={{ color: theme.subtext }}>No data</Text>
+          )}
+        </Card>
+
+        {/* GRAPH 2: OUTLETS OVER TIME */}
+        <Card>
+          <Text style={[styles.graphTitle, { color: theme.text }]}>Outlets Over Time</Text>
+          {trendPoints.length > 0 ? (
+            <>
+              <View style={{ marginBottom: 8 }}>
+                <TrendLineChart
+                  data={trendPoints.map((_, i) => {
+                    const outletEstimate = Math.floor((i / trendPoints.length) * dashboard.summary.totalOutlets);
+                    return outletEstimate;
+                  })}
+                  color="#10b981"
+                  maxValue={Math.max(dashboard.summary.totalOutlets, 1)}
+                />
+              </View>
+              <View style={styles.pieLegend}>
+                <View style={styles.pieLegendItem}>
+                  <View style={[styles.pieLegendDot, { backgroundColor: "#10b981" }]} />
+                  <Text style={{ color: theme.text, fontSize: 12 }}>Total Outlets: {dashboard.summary.totalOutlets}</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <Text style={{ color: theme.subtext }}>No data</Text>
+          )}
+        </Card>
+
+        {/* GRAPH 3: DELIVERY REQUESTS & COMPLETED */}
+        <Card>
+          <Text style={[styles.graphTitle, { color: theme.text }]}>Delivery Activity</Text>
+          <View style={styles.dualGraphContainer}>
+            <View style={styles.subGraph}>
+              <Text style={{ color: theme.subtext, fontSize: 11, marginBottom: 6 }}>Requests Created</Text>
+              {trendPoints.length > 0 ? (
+                <>
+                  {(() => {
+                    const maxVal = Math.max(...trendPoints.map((p) => Math.max(p.deliveryCreated, p.completed)), 1);
+                    return (
+                      <>
+                        <TrendLineChart
+                          data={trendPoints.map((p) => p.deliveryCreated)}
+                          color="#4f46e5"
+                          width={130}
+                          maxValue={maxVal}
+                        />
+                        <View style={[styles.miniLegend, { marginTop: 4 }]}>
+                          <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
+                        </View>
+                      </>
+                    );
+                  })()}
+                  <View style={styles.miniLegend}>
+                    <View style={[styles.miniDot, { backgroundColor: "#4f46e5" }]} />
+                    <Text style={{ color: theme.subtext, fontSize: 10 }}>Created</Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={{ color: theme.subtext, fontSize: 11 }}>No data</Text>
+              )}
+            </View>
+            <View style={styles.subGraph}>
+              <Text style={{ color: theme.subtext, fontSize: 11, marginBottom: 6 }}>Requests Completed</Text>
+              {trendPoints.length > 0 ? (
+                <>
+                  {(() => {
+                    const maxVal = Math.max(...trendPoints.map((p) => Math.max(p.deliveryCreated, p.completed)), 1);
+                    return (
+                      <>
+                        <TrendLineChart
+                          data={trendPoints.map((p) => p.completed)}
+                          color="#10b981"
+                          width={130}
+                          maxValue={maxVal}
+                        />
+                        <View style={[styles.miniLegend, { marginTop: 4 }]}>
+                          <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
+                        </View>
+                      </>
+                    );
+                  })()}
+                  <View style={styles.miniLegend}>
+                    <View style={[styles.miniDot, { backgroundColor: "#10b981" }]} />
+                    <Text style={{ color: theme.subtext, fontSize: 10 }}>Completed</Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={{ color: theme.subtext, fontSize: 11 }}>No data</Text>
+              )}
+            </View>
+          </View>
+        </Card>
+
+        {/* GRAPH 4: AVAILABILITY REQUESTS */}
+        <Card>
+          <Text style={[styles.graphTitle, { color: theme.text }]}>Availability Requests</Text>
+          <View style={styles.dualGraphContainer}>
+            <View style={styles.subGraph}>
+              <Text style={{ color: theme.subtext, fontSize: 11, marginBottom: 6 }}>Requests Posted</Text>
+              {trendPoints.length > 0 ? (
+                <>
+                  {(() => {
+                    const maxVal = Math.max(...trendPoints.map((p) => Math.max(p.availabilityCreated, p.availabilityResponded)), 1);
+                    return (
+                      <>
+                        <TrendLineChart
+                          data={trendPoints.map((p) => p.availabilityCreated)}
+                          color="#f59e0b"
+                          width={130}
+                          maxValue={maxVal}
+                        />
+                        <View style={[styles.miniLegend, { marginTop: 4 }]}>
+                          <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
+                        </View>
+                      </>
+                    );
+                  })()}
+                  <View style={styles.miniLegend}>
+                    <View style={[styles.miniDot, { backgroundColor: "#f59e0b" }]} />
+                    <Text style={{ color: theme.subtext, fontSize: 10 }}>Posted</Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={{ color: theme.subtext, fontSize: 11 }}>No data</Text>
+              )}
+            </View>
+            <View style={styles.subGraph}>
+              <Text style={{ color: theme.subtext, fontSize: 11, marginBottom: 6 }}>Outlet Responses</Text>
+              {trendPoints.length > 0 ? (
+                <>
+                  {(() => {
+                    const maxVal = Math.max(...trendPoints.map((p) => Math.max(p.availabilityCreated, p.availabilityResponded)), 1);
+                    return (
+                      <>
+                        <TrendLineChart
+                          data={trendPoints.map((p) => p.availabilityResponded)}
+                          color="#8b5cf6"
+                          width={130}
+                          maxValue={maxVal}
+                        />
+                        <View style={[styles.miniLegend, { marginTop: 4 }]}>
+                          <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
+                        </View>
+                      </>
+                    );
+                  })()}
+                  <View style={styles.miniLegend}>
+                    <View style={[styles.miniDot, { backgroundColor: "#8b5cf6" }]} />
+                    <Text style={{ color: theme.subtext, fontSize: 10 }}>Responded</Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={{ color: theme.subtext, fontSize: 11 }}>No data</Text>
+              )}
+            </View>
+          </View>
+        </Card>
+
+        {/* RATINGS */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Ratings</Text>
+          <View style={styles.ratingGrid}>
+            <View style={styles.ratingItem}>
+              <Text style={{ color: theme.subtext, fontSize: 12 }}>Overall</Text>
+              <Text style={[styles.ratingValue, { color: theme.text }]}>{dashboard.summary.avgRating.toFixed(2)}⭐</Text>
+            </View>
+            <View style={styles.ratingItem}>
+              <Text style={{ color: theme.subtext, fontSize: 12 }}>Deliverer Avg</Text>
+              <Text style={[styles.ratingValue, { color: "#f59e0b" }]}>{dashboard.summary.avgDelivererRating.toFixed(2)}⭐</Text>
+            </View>
+            <View style={styles.ratingItem}>
+              <Text style={{ color: theme.subtext, fontSize: 12 }}>Requester Avg</Text>
+              <Text style={[styles.ratingValue, { color: "#10b981" }]}>{dashboard.summary.avgRequesterRating.toFixed(2)}⭐</Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* TOP PERFORMERS */}
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Top Deliverers</Text>
+          {dashboard.leaderboard.topDeliverers.length === 0 ? (
+            <Text style={{ color: theme.subtext, marginTop: 8 }}>No data yet</Text>
+          ) : (
+            dashboard.leaderboard.topDeliverers
+              .slice(0, 5)
+              .map((user, i) => (
+                <View key={user.id} style={{ marginTop: 8, flexDirection: "row", justifyContent: "space-between" }}>
+                  <Text style={{ color: theme.text }}>
+                    {i + 1}. {user.name}
+                  </Text>
+                  <Text style={{ color: theme.primary, fontWeight: "700" }}>{user.rating.toFixed(2)}⭐</Text>
+                </View>
+              ))
+          )}
+        </Card>
+
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Top Requesters</Text>
+          {dashboard.leaderboard.topRequesters.length === 0 ? (
+            <Text style={{ color: theme.subtext, marginTop: 8 }}>No data yet</Text>
+          ) : (
+            dashboard.leaderboard.topRequesters
+              .slice(0, 5)
+              .map((user, i) => (
+                <View key={user.id} style={{ marginTop: 8, flexDirection: "row", justifyContent: "space-between" }}>
+                  <Text style={{ color: theme.text }}>
+                    {i + 1}. {user.name}
+                  </Text>
+                  <Text style={{ color: theme.primary, fontWeight: "700" }}>{user.rating.toFixed(2)}⭐</Text>
+                </View>
+              ))
+          )}
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -301,74 +585,134 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  tabContainer: {
-    borderBottomWidth: 1,
-  },
-  tabInner: {
+  kpiGrid: {
     flexDirection: "row",
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 8,
     marginBottom: 12,
   },
-  statCard: {
+  kpiCard: {
+    width: "48%",
     alignItems: "center",
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 8,
+  kpiIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
   },
-  statLabel: {
-    fontSize: 12,
+  kpiValue: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  kpiLabel: {
+    fontSize: 11,
     marginTop: 4,
   },
-  trendTitle: {
-    fontSize: 14,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: "700",
     marginBottom: 12,
   },
-  trendList: {
+  trendHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  daySelector: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  dayChip: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  graphTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 10,
+  },
+  dualGraphContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  subGraph: {
+    flex: 1,
+  },
+  miniLegend: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+  },
+  miniDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pieLegend: {
     gap: 8,
   },
-  trendItem: {
+  pieLegendItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  trendDate: {
-    fontSize: 12,
+  pieLegendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  trendBar: {
-    height: 20,
-    borderRadius: 4,
+  pieCenter: {
+    fontSize: 20,
+    fontWeight: "800",
   },
-  trendCount: {
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "right",
-  },
-  apiTable: {
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  apiRow: {
-    flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderTopWidth: 1,
-  },
-  apiHeader: {
+  pieCenterLabel: {
     fontSize: 11,
-    fontWeight: "700",
+    marginTop: 2,
   },
-  apiCell: {
+  ratingGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  ratingItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  ratingValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 4,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  ratingRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  ratingCard: {
+    flex: 1,
+    alignItems: "center",
+  },
+  ratingLabel: {
     fontSize: 12,
+    marginBottom: 6,
   },
 });

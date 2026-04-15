@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -44,28 +45,45 @@ export default function AvailabilityScreen() {
   const { theme, userRole } = useTheme();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [allRequests, setAllRequests] = useState<AvailabilityRequest[]>([]);
   const [outletsList, setOutletsList] = useState<Outlet[]>([]);
   const [filterOutlet, setFilterOutlet] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "responded">(
-    "all"
-  );
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [availData, outletData] = await Promise.all([
-        availability.getAll(),
-        outlets.getAll(),
-      ]);
-      setAllRequests(availData);
-      setOutletsList(outletData);
+      
+      // Outlet owners get their outlet's requests; students get all public confirmed
+      let availData;
+      if (userRole === "outlet_owner") {
+        availData = await availability.getPending();
+      } else {
+        availData = await availability.getAll();
+      }
+      setAllRequests(availData || []);
+      
+      // Load outlets
+      try {
+        const outletData = await outlets.getAll();
+        setOutletsList(outletData || []);
+      } catch (err) {
+        console.warn("Failed to load outlets");
+        setOutletsList([]);
+      }
     } catch (error) {
-      Alert.alert("Error", "Failed to load data");
+      console.error("Load error:", error);
+      setAllRequests([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userRole]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, [loadData]);
 
   useFocusEffect(
     useCallback(() => {
@@ -73,19 +91,17 @@ export default function AvailabilityScreen() {
     }, [loadData])
   );
 
-  // Filter requests
-  let filtered = allRequests.filter((req) => {
-    if (filterOutlet) {
-      const outletName =
-        typeof req.outlet === "object" ? req.outlet.name : req.outlet;
-      if (outletName !== filterOutlet) return false;
-    }
-
-    if (filterStatus === "pending" && req.status !== "PENDING") return false;
-    if (filterStatus === "responded" && req.status !== "CONFIRMED") return false;
-
-    return true;
-  });
+  // Filter requests - only CONFIRMED and non-expired
+  const now = new Date();
+  const filtered = allRequests
+    .filter((req) => req.status === "CONFIRMED" && new Date(req.expiresAt) > now)
+    .filter((req) => {
+      if (filterOutlet) {
+        const outletName = typeof req.outlet === "object" ? req.outlet.name : req.outlet;
+        if (outletName !== filterOutlet) return false;
+      }
+      return true;
+    });
 
   if (loading) {
     return (
@@ -98,60 +114,128 @@ export default function AvailabilityScreen() {
     );
   }
 
-  // ===== OUTLET OWNER VIEW: HISTORY =====
+  // ===== OUTLET OWNER VIEW =====
   if (userRole === "outlet_owner") {
-    const respondedRequests = allRequests.filter((r) => r.status === "CONFIRMED");
+    // Filter by status and exclude expired requests
+    const now = new Date();
+    const pendingRequests = allRequests.filter(
+      (r) => r.status === "PENDING" && new Date(r.expiresAt) > now
+    );
+    const historyRequests = allRequests.filter(
+      (r) => r.status === "CONFIRMED" && new Date(r.expiresAt) > now
+    );
+
+    const handleRespond = async (requestId: string, isAvailable: boolean) => {
+      try {
+        await availability.respond(requestId, isAvailable);
+        Alert.alert(
+          "Success",
+          isAvailable ? "Marked as available!" : "Marked as unavailable!"
+        );
+        loadData();
+      } catch (error) {
+        Alert.alert("Error", "Failed to respond to request");
+      }
+    };
 
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-        <TopBar title="Availability History" />
-        <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
-          {respondedRequests.length === 0 ? (
+        <TopBar title="Availability Requests" />
+        <ScrollView 
+          contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        >
+          {/* PENDING REQUESTS SECTION */}
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            Pending Requests ({pendingRequests.length})
+          </Text>
+          {pendingRequests.length === 0 ? (
             <Card>
-              <Text
-                style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
-              >
+              <Text style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}>
+                No pending requests
+              </Text>
+            </Card>
+          ) : (
+            pendingRequests.map((req) => (
+              <Card key={req._id}>
+                <View style={styles.requestHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.itemName, { color: theme.text }]}>{req.itemName}</Text>
+                    <Text style={[styles.requesterName, { color: theme.subtext }]}>
+                      from {typeof req.requestedBy === "object" ? req.requestedBy?.name : "Student"}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: "#f59e0b20" }]}>
+                    <Text style={[styles.statusText, { color: "#f59e0b" }]}>⏳ Pending</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                  <Pressable
+                    onPress={() => handleRespond(req._id, true)}
+                    style={[styles.respondButton, { backgroundColor: "#10b98180", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#10b981" }]}>✓ Available</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleRespond(req._id, false)}
+                    style={[styles.respondButton, { backgroundColor: "#ef444480", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#ef4444" }]}>✗ Unavailable</Text>
+                  </Pressable>
+                </View>
+              </Card>
+            ))
+          )}
+
+          {/* HISTORY SECTION */}
+          <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 20 }]}>
+            History ({historyRequests.length})
+          </Text>
+          {historyRequests.length === 0 ? (
+            <Card>
+              <Text style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}>
                 No responded requests yet
               </Text>
             </Card>
           ) : (
-            respondedRequests.map((req) => (
+            historyRequests.map((req) => (
               <Card key={req._id}>
                 <View style={styles.requestHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: theme.text }]}>
-                      {req.itemName}
-                    </Text>
+                    <Text style={[styles.itemName, { color: theme.text }]}>{req.itemName}</Text>
                     <Text style={[styles.requesterName, { color: theme.subtext }]}>
-                      from{" "}
-                      {typeof req.requestedBy === "object"
-                        ? req.requestedBy?.name
-                        : "Student"}
+                      from {typeof req.requestedBy === "object" ? req.requestedBy?.name : "Student"}
                     </Text>
                   </View>
                   <View
                     style={[
                       styles.statusBadge,
-                      {
-                        backgroundColor: req.response?.available
-                          ? "#10b98120"
-                          : "#ef444420",
-                      },
+                      { backgroundColor: req.response?.available ? "#10b98120" : "#ef444420" },
                     ]}
                   >
                     <Text
                       style={[
                         styles.statusText,
-                        {
-                          color: req.response?.available
-                            ? "#10b981"
-                            : "#ef4444",
-                        },
+                        { color: req.response?.available ? "#10b981" : "#ef4444" },
                       ]}
                     >
                       {req.response?.available ? "✓ Available" : "✗ Not Available"}
                     </Text>
                   </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                  <Pressable
+                    onPress={() => handleRespond(req._id, true)}
+                    style={[styles.respondButton, { backgroundColor: "#10b98180", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#10b981" }]}>✓ Available</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleRespond(req._id, false)}
+                    style={[styles.respondButton, { backgroundColor: "#ef444480", flex: 1 }]}
+                  >
+                    <Text style={[styles.respondButtonText, { color: "#ef4444" }]}>✗ Unavailable</Text>
+                  </Pressable>
                 </View>
               </Card>
             ))
@@ -161,48 +245,17 @@ export default function AvailabilityScreen() {
     );
   }
 
-  // ===== STUDENT VIEW: PUBLIC BOARD =====
+  // ===== STUDENT VIEW: Only CONFIRMED =====
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
       <TopBar title="Availability Board" />
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 100 }]}>
+      <ScrollView 
+        contentContainerStyle={[styles.container, { paddingBottom: 100 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+      >
         {/* FILTERS */}
         <Card>
-          <Text style={[styles.label, { color: theme.text }]}>Filter by Status</Text>
-          <View style={styles.row}>
-            {["all", "pending", "responded"].map((status) => (
-              <Pressable
-                key={status}
-                onPress={() => setFilterStatus(status as any)}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor:
-                      filterStatus === status ? theme.primary : theme.card,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: filterStatus === status ? "#fff" : theme.text,
-                    fontWeight: "600",
-                    fontSize: 11,
-                  }}
-                >
-                  {status === "all"
-                    ? "All"
-                    : status === "pending"
-                    ? "Pending"
-                    : "Responded"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-            Filter by Outlet
-          </Text>
+          <Text style={[styles.label, { color: theme.text }]}>Filter by Outlet</Text>
           <View style={styles.row}>
             <Pressable
               onPress={() => setFilterOutlet(null)}
@@ -224,17 +277,14 @@ export default function AvailabilityScreen() {
                 All Outlets
               </Text>
             </Pressable>
-            {outletsList.slice(0, 4).map((outlet) => (
+            {outletsList.map((outlet) => (
               <Pressable
                 key={outlet._id}
-                onPress={() =>
-                  setFilterOutlet(filterOutlet === outlet.name ? null : outlet.name)
-                }
+                onPress={() => setFilterOutlet(filterOutlet === outlet.name ? null : outlet.name)}
                 style={[
                   styles.chip,
                   {
-                    backgroundColor:
-                      filterOutlet === outlet.name ? theme.primary : theme.card,
+                    backgroundColor: filterOutlet === outlet.name ? theme.primary : theme.card,
                     borderColor: theme.border,
                   },
                 ]}
@@ -253,119 +303,47 @@ export default function AvailabilityScreen() {
           </View>
         </Card>
 
-        {/* PENDING REQUESTS */}
+        {/* ANSWERED CHECKS ONLY */}
         <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 12 }]}>
-          Pending Checks
+          Answered Availability Checks
         </Text>
-        {filtered.filter((r) => r.status === "PENDING").length === 0 ? (
+        {filtered.length === 0 ? (
           <Card>
-            <Text
-              style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
-            >
-              No pending availability checks
+            <Text style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}>
+              No answered availability checks
             </Text>
           </Card>
         ) : (
-          filtered
-            .filter((r) => r.status === "PENDING")
-            .map((req) => (
-              <Card key={req._id}>
-                <View>
-                  <Text style={[styles.itemName, { color: theme.text }]}>
-                    {req.itemName}
-                  </Text>
+          filtered.map((req) => (
+            <Card key={req._id}>
+              <View style={styles.requestHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.itemName, { color: theme.text }]}>{req.itemName}</Text>
                   <Text style={[styles.requesterName, { color: theme.subtext }]}>
-                    from{" "}
-                    {typeof req.requestedBy === "object"
-                      ? req.requestedBy?.name
-                      : "Student"}
+                    from {typeof req.requestedBy === "object" ? req.requestedBy?.name : "Student"}
                   </Text>
                   <Text style={[styles.outletInfo, { color: theme.subtext, marginTop: 4 }]}>
-                    📍{" "}
-                    {typeof req.outlet === "object"
-                      ? req.outlet?.name
-                      : req.outlet}
+                    📍 {typeof req.outlet === "object" ? req.outlet?.name : req.outlet}
                   </Text>
                 </View>
                 <View
                   style={[
                     styles.statusBadge,
-                    { backgroundColor: theme.primary + "20", marginTop: 12 },
+                    { backgroundColor: req.response?.available ? "#10b98120" : "#ef444420" },
                   ]}
                 >
                   <Text
-                    style={[styles.statusText, { color: theme.primary }]}
-                  >
-                    ⏳ Awaiting Response
-                  </Text>
-                </View>
-              </Card>
-            ))
-        )}
-
-        {/* RESPONDED REQUESTS */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 20 }]}>
-          Answered Checks
-        </Text>
-        {filtered.filter((r) => r.status === "CONFIRMED").length === 0 ? (
-          <Card>
-            <Text
-              style={[styles.emptyText, { color: theme.subtext, textAlign: "center" }]}
-            >
-              No answered checks yet
-            </Text>
-          </Card>
-        ) : (
-          filtered
-            .filter((r) => r.status === "CONFIRMED")
-            .map((req) => (
-              <Card key={req._id}>
-                <View style={styles.requestHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.itemName, { color: theme.text }]}>
-                      {req.itemName}
-                    </Text>
-                    <Text style={[styles.requesterName, { color: theme.subtext }]}>
-                      from{" "}
-                      {typeof req.requestedBy === "object"
-                        ? req.requestedBy?.name
-                        : "Student"}
-                    </Text>
-                    <Text
-                      style={[styles.outletInfo, { color: theme.subtext, marginTop: 4 }]}
-                    >
-                      📍{" "}
-                      {typeof req.outlet === "object"
-                        ? req.outlet?.name
-                        : req.outlet}
-                    </Text>
-                  </View>
-                  <View
                     style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor: req.response?.available
-                          ? "#10b98120"
-                          : "#ef444420",
-                      },
+                      styles.statusText,
+                      { color: req.response?.available ? "#10b981" : "#ef4444" },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        {
-                          color: req.response?.available
-                            ? "#10b981"
-                            : "#ef4444",
-                        },
-                      ]}
-                    >
-                      {req.response?.available ? "✓ Yes" : "✗ No"}
-                    </Text>
-                  </View>
+                    {req.response?.available ? "✓ Yes" : "✗ No"}
+                  </Text>
                 </View>
-              </Card>
-            ))
+              </View>
+            </Card>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
@@ -373,63 +351,22 @@ export default function AvailabilityScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  row: {
-    flexDirection: "row",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  requestHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  requesterName: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  outletInfo: {
-    fontSize: 12,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  emptyText: {
-    paddingVertical: 20,
-    fontSize: 13,
-  },
+  container: { padding: 16 },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+  sectionTitle: { fontSize: 14, fontWeight: "700", marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 8 },
+  row: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1 },
+  requestHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  itemName: { fontSize: 14, fontWeight: "600" },
+  requesterName: { fontSize: 12, marginTop: 4 },
+  outletInfo: { fontSize: 12 },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  statusText: { fontSize: 12, fontWeight: "600" },
+  respondButton: { paddingVertical: 10, borderRadius: 8, alignItems: "center" },
+  respondButtonText: { fontSize: 12, fontWeight: "600" },
+  emptyText: { paddingVertical: 20, fontSize: 13 },
+  modeSelector: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#ccc" },
+  modeTab: { flex: 1, paddingHorizontal: 16, paddingVertical: 12, alignItems: "center", borderBottomWidth: 3 },
+  modeTabText: { fontSize: 13 },
 });

@@ -74,7 +74,7 @@ export const requests = {
     return response.json();
   },
 
-  async getAll(filter: 'all' | 'own' | 'inprogress' | 'completed' = 'all', query?: string) {
+  async getAll(filter: 'all' | 'own' | 'accepted' | 'inprogress' | 'completed' = 'all', query?: string) {
     const headers = await getHeaders();
     const url = new URL(`${BASE_URL}/requests`);
     url.searchParams.append('filter', filter);
@@ -143,6 +143,14 @@ export const requests = {
     });
     if (!response.ok) throw new Error('Failed to delete request');
     return response.json();
+  },
+
+  async getUnaccepted() {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/requests/unaccepted/list`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch unaccepted requests');
+    const data = await response.json();
+    return data.requests || [];
   }
 };
 
@@ -286,6 +294,17 @@ export const users = {
     });
     if (!response.ok) throw new Error('Failed to delete user');
     return response.json();
+  },
+
+  async updateFields(id: string, fields: Record<string, any>) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/users/${id}/fields`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(fields)
+    });
+    if (!response.ok) throw new Error('Failed to update user');
+    return response.json();
   }
 };
 
@@ -318,15 +337,12 @@ export const outlets = {
     return response.json();
   },
 
-  async update(id: string, name: string, locationDescription: string, ownerId?: string) {
+  async update(id: string, data: any) {
     const headers = await getHeaders();
-    const body: any = { name, locationDescription };
-    if (ownerId) body.ownerId = ownerId;
-    
     const response = await fetch(`${BASE_URL}/outlets/${id}`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(data)
     });
     if (!response.ok) throw new Error('Failed to update outlet');
     return response.json();
@@ -346,6 +362,13 @@ export const outlets = {
 // ============= ANALYTICS =============
 
 export const analytics = {
+  async getDashboard(days: number = 14) {
+    const headers = await getHeaders();
+    const response = await fetch(`${BASE_URL}/analytics/dashboard?days=${days}`, { headers });
+    if (!response.ok) throw new Error('Failed to fetch analytics dashboard');
+    return response.json();
+  },
+
   async getSummary() {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/analytics/summary`, { headers });
@@ -357,21 +380,24 @@ export const analytics = {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/analytics/requests-over-time?days=${days}`, { headers });
     if (!response.ok) throw new Error('Failed to fetch requests trend');
-    return response.json();
+    const data = await response.json();
+    return data.data || [];
   },
 
   async getUsersTrend(days: number = 30) {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/analytics/users-over-time?days=${days}`, { headers });
     if (!response.ok) throw new Error('Failed to fetch users trend');
-    return response.json();
+    const data = await response.json();
+    return data.data || [];
   },
 
   async getApiUsage() {
     const headers = await getHeaders();
     const response = await fetch(`${BASE_URL}/analytics/api-usage`, { headers });
     if (!response.ok) throw new Error('Failed to fetch API usage');
-    return response.json();
+    const data = await response.json();
+    return data.data || [];
   },
 
   async getLeaderboard() {

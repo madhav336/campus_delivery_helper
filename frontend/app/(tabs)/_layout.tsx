@@ -34,7 +34,7 @@ export default function TabLayout() {
     }
 
     if (userRole === "outlet_owner") {
-      if (!["availability", "pending", "profile"].includes(currentRoute)) {
+      if (!["availability", "profile"].includes(currentRoute)) {
         setTimeout(() => router.replace("/(tabs)/availability"), 0);
       }
     }
@@ -130,18 +130,6 @@ export default function TabLayout() {
               : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="checkmark-circle-outline" size={size} color={color} />
-          ),
-        }}
-      />
-
-      {/* OUTLET SPECIFIC */}
-      <Tabs.Screen
-        name="pending"
-        options={{
-          title: "Pending",
-          href: userRole === "outlet_owner" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="document-outline" size={size} color={color} />
           ),
         }}
       />

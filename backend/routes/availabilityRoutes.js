@@ -48,7 +48,7 @@ router.post('/', verifyToken, requireRole('student'), async (req, res) => {
 /**
  * GET /api/availability
  * Get availability requests
- * Query: filter=own|public (required)
+ * Query: filter=own|public|all (required)
  */
 router.get('/', verifyToken, async (req, res) => {
   try {
@@ -61,8 +61,11 @@ router.get('/', verifyToken, async (req, res) => {
     } else if (filter === 'public') {
       // Public confirmed availabilities (visible to all)
       query = { status: 'CONFIRMED' };
+    } else if (filter === 'all') {
+      // All pending and confirmed availabilities (for availability tab)
+      query = { status: { $in: ['PENDING', 'CONFIRMED'] } };
     } else {
-      return res.status(400).json({ message: 'Filter must be own or public' });
+      return res.status(400).json({ message: 'Filter must be own, public, or all' });
     }
 
     const requests = await AvailabilityRequest.find(query)
@@ -79,7 +82,8 @@ router.get('/', verifyToken, async (req, res) => {
 
 /**
  * GET /api/availability/pending/all
- * Get pending requests for outlet owner (their outlet only)
+ * Get pending AND confirmed requests for outlet owner (their outlet only)
+ * Used by outlet owners to view their requests (pending to respond to, confirmed as history)
  */
 router.get('/pending/all', verifyToken, requireRole('outlet_owner'), async (req, res) => {
   try {
@@ -89,13 +93,16 @@ router.get('/pending/all', verifyToken, requireRole('outlet_owner'), async (req,
       return res.json({ requests: [] });
     }
 
+    const now = new Date();
     const requests = await AvailabilityRequest.find({
       outlet: user.outletId._id,
-      status: 'PENDING'
+      status: { $in: ['PENDING', 'CONFIRMED'] },
+      expiresAt: { $gt: now } // Only return non-expired requests
     })
       .populate('requestedBy', 'name phone')
       .populate('outlet', 'name locationDescription')
-      .sort({ createdAt: -1 });
+      .populate('response.respondedBy', 'name phone')
+      .sort({ status: 1, createdAt: -1 }); // PENDING first, then CONFIRMED
 
     res.json({ requests });
   } catch (error) {

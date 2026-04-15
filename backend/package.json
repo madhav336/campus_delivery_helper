@@ -6,7 +6,11 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "seed:analytics:mock": "node seedAnalyticsMock.js",
+    "clear:requests": "node clearRequests.js",
+    "reset:manual": "node resetForManualTesting.js",
+    "reset:manual:full": "node resetForManualTesting.js --full"
   },
   "keywords": [],
   "author": "",

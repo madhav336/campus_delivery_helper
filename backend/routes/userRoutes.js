@@ -18,6 +18,13 @@ router.get('/me', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Populate outlet reference for outlet owners
+    let userData = user.toObject();
+    if (user.role === 'outlet_owner' && user.outletId) {
+      const outlet = await user.populate('outletId', 'name locationDescription');
+      userData.outlet = outlet.outletId;
+    }
+
     // Add stats
     const deliveriesCompleted = await DeliveryRequest.countDocuments({
       $or: [
@@ -28,7 +35,7 @@ router.get('/me', verifyToken, async (req, res) => {
 
     res.json({
       user: {
-        ...user.toObject(),
+        ...userData,
         deliveriesCompleted
       }
     });
@@ -87,7 +94,15 @@ router.put('/me', verifyToken, async (req, res) => {
 
     await user.save();
 
-    res.json({ message: 'Profile updated', user: user.toObject() });
+    let userData = user.toObject();
+    
+    // Populate outlet reference for outlet owners
+    if (user.role === 'outlet_owner' && user.outletId) {
+      await user.populate('outletId', 'name locationDescription');
+      userData.outlet = user.outletId;
+    }
+
+    res.json({ message: 'Profile updated', user: userData });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -119,10 +134,21 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
  */
 router.delete('/:id', verifyToken, requireRole('admin'), async (req, res) => {
   try {
+    if (req.params.id === req.user.userId) {
+      return res.status(400).json({ message: 'Admins cannot delete their own account' });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ message: 'Cannot delete the last admin account' });
+      }
     }
 
     // Cascade delete: remove all requests by this user
