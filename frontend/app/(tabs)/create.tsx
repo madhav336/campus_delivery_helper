@@ -313,12 +313,12 @@ export default function CreateScreen() {
                     </>
                   )}
 
-                  {/* HOSTEL */}
+                  {/* DELIVERY LOCATION */}
                   <Text style={[styles.label, { color: theme.text, marginTop: 12 }]}>
-                    Hostel
+                    Delivery Location
                   </Text>
                   <TextInput
-                    placeholder="Enter your hostel name"
+                    placeholder="Enter delivery location"
                     placeholderTextColor={theme.subtext}
                     value={hostel}
                     onChangeText={setHostel}

@@ -1,4 +1,4 @@
-import { View, Text, TextInput, Pressable, Alert, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, Alert, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,9 @@ import { useTheme } from '@/context/ThemeContext';
 import GradientButton from '@/components/ui/GradientButton';
 import { auth } from '@/services/api';
 import { Ionicons } from '@expo/vector-icons';
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRegex = /^\d{10}$/;
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -24,6 +27,16 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     if (!name || !email || !password || !phone) {
       Alert.alert('Validation', 'Fill all required fields');
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      Alert.alert('Validation', 'Please enter a valid email address');
+      return;
+    }
+
+    if (!phoneRegex.test(phone)) {
+      Alert.alert('Validation', 'Please enter a valid 10-digit phone number');
       return;
     }
 
@@ -59,7 +72,15 @@ export default function SignupScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
-      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.bg }]}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+        <ScrollView 
+          scrollEnabled={true}
+          bounces={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[styles.container, { backgroundColor: theme.bg, flexGrow: 1 }]}>
         <Text style={[styles.title, { color: theme.text }]}>Create Account</Text>
 
         {/* Role Selection */}
@@ -162,6 +183,7 @@ export default function SignupScreen() {
           <Text style={[styles.link, { color: theme.primary }]}>Already have an account? Login</Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
