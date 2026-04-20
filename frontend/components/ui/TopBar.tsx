@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/context/ThemeContext";
 
-export default function TopBar({ title }: { title: string }) {
+export default function TopBar({ title }: { readonly title: string }) {
   const { theme } = useTheme();
 
   return (

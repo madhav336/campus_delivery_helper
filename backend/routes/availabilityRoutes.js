@@ -95,7 +95,7 @@ router.get('/pending/all', verifyToken, requireRole('outlet_owner'), async (req,
 
     const now = new Date();
     const requests = await AvailabilityRequest.find({
-      outlet: user.outletId._id,
+      outlet: user.outletId?._id,
       status: { $in: ['PENDING', 'CONFIRMED'] },
       expiresAt: { $gt: now } // Only return non-expired requests
     })

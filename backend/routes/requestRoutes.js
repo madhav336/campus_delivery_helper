@@ -7,6 +7,52 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const router = express.Router();
 
 /**
+ * Escapes special regex characters to prevent ReDoS attacks
+ */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Builds the MongoDB query object for delivery request filters
+ */
+async function buildRequestQuery(filter, userId, outlet, minFee, maxFee) {
+  if (filter === 'own') {
+    return { requestedBy: userId };
+  }
+  if (filter === 'accepted') {
+    return { acceptedBy: userId };
+  }
+  if (filter === 'inprogress') {
+    return { status: 'IN_PROGRESS', $or: [{ requestedBy: userId }, { acceptedBy: userId }] };
+  }
+  if (filter === 'completed') {
+    return { status: 'COMPLETED', requestedBy: userId };
+  }
+
+  // Default: 'all' — public board
+  const query = { status: 'OPEN', requestedBy: { $ne: userId }, isExpiredPending: false };
+
+  if (outlet) {
+    const escapedOutlet = escapeRegex(outlet);
+    const outletDoc = await Outlet.findOne({ name: new RegExp(escapedOutlet, 'i') });
+    if (outletDoc) {
+      query.outlet = outletDoc._id;
+    } else {
+      query.outlet = new RegExp('^' + escapedOutlet + '$', 'i');
+    }
+  }
+
+  if (minFee || maxFee) {
+    query.fee = {};
+    if (minFee) query.fee.$gte = Number(minFee);
+    if (maxFee) query.fee.$lte = Number(maxFee);
+  }
+
+  return query;
+}
+
+/**
  * POST /api/requests
  * Create a new delivery request (students only)
  */
@@ -55,59 +101,8 @@ router.post('/', verifyToken, requireRole('student'), async (req, res) => {
 router.get('/', verifyToken, async (req, res) => {
   try {
     const { filter = 'all', outlet, minFee, maxFee, sortBy = 'date' } = req.query;
-    let query = {};
-    let sort = { createdAt: -1 };
-
-    if (sortBy === 'rating') {
-      sort = { 'requesterRating.rating': -1 };
-    }
-
-    if (filter === 'all') {
-      // Public board: all OPEN requests except own and expired pending
-      query = {
-        status: 'OPEN',
-        requestedBy: { $ne: req.user.userId },
-        isExpiredPending: false
-      };
-
-      // Apply filters - search by outlet (string or database outlet)
-      if (outlet) {
-        // First, try to find outlet as a database outlet by name
-        const outletDoc = await Outlet.findOne({ name: new RegExp(outlet, 'i') });
-        if (outletDoc) {
-          query.outlet = outletDoc._id;
-        } else {
-          // No database outlet found, try to match as a string outlet using case-insensitive regex
-          query.outlet = new RegExp('^' + outlet + '$', 'i');
-        }
-      }
-      if (minFee || maxFee) {
-        query.fee = {};
-        if (minFee) query.fee.$gte = Number(minFee);
-        if (maxFee) query.fee.$lte = Number(maxFee);
-      }
-    } else if (filter === 'own') {
-      // User's own requests (where user is the requester)
-      query = { requestedBy: req.user.userId };
-    } else if (filter === 'accepted') {
-      // Requests user has accepted (deliveries user is doing)
-      query = { acceptedBy: req.user.userId };
-    } else if (filter === 'inprogress') {
-      // In-progress requests where user is involved
-      query = {
-        status: 'IN_PROGRESS',
-        $or: [
-          { requestedBy: req.user.userId },
-          { acceptedBy: req.user.userId }
-        ]
-      };
-    } else if (filter === 'completed') {
-      // User's completed requests
-      query = {
-        status: 'COMPLETED',
-        requestedBy: req.user.userId
-      };
-    }
+    const sort = sortBy === 'rating' ? { 'requesterRating.rating': -1 } : { createdAt: -1 };
+    const query = await buildRequestQuery(filter, req.user.userId, outlet, minFee, maxFee);
 
     const requests = await DeliveryRequest.find(query)
       .populate('requestedBy', 'name phone requesterRating delivererRating')

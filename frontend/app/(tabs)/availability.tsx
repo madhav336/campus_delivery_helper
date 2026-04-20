@@ -4,11 +4,8 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  TextInput,
   ActivityIndicator,
   Alert,
-  Modal,
-  FlatList,
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -134,6 +131,7 @@ export default function AvailabilityScreen() {
         );
         loadData();
       } catch (error) {
+        console.error("Failed to respond to availability request:", error);
         Alert.alert("Error", "Failed to respond to request");
       }
     };
@@ -262,14 +260,14 @@ export default function AvailabilityScreen() {
               style={[
                 styles.chip,
                 {
-                  backgroundColor: !filterOutlet ? theme.primary : theme.card,
+                  backgroundColor: filterOutlet === null ? theme.primary : theme.card,
                   borderColor: theme.border,
                 },
               ]}
             >
               <Text
                 style={{
-                  color: !filterOutlet ? "#fff" : theme.text,
+                  color: filterOutlet === null ? "#fff" : theme.text,
                   fontWeight: "600",
                   fontSize: 11,
                 }}

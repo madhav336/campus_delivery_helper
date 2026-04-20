@@ -1,0 +1,106 @@
+<mxfile version="22.1.2" type="device">
+  <diagram id="domain_model" name="Original Format Model">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Nodes -->
+        <mxCell id="FilterCriteria" value="FilterCriteria" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="80" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="User" value="User" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="200" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="DeliveryRequest" value="DeliveryRequest" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="100" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="Outlet" value="Outlet" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="200" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="AvailabilityRequest" value="AvailabilityRequest" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="300" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="RequestAssignment" value="RequestAssignment" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="500" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="AvailabilityResponse" value="AvailabilityResponse" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="400" y="500" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="RequestStatusHistory" value="RequestStatusHistory" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="500" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <!-- User -> DeliveryRequest (creates) -->
+        <mxCell id="edge1" value="creates" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=1;exitY=0.25;entryX=0;entryY=0.5;" edge="1" parent="1" source="User" target="DeliveryRequest">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- User -> AvailabilityRequest (creates) -->
+        <mxCell id="edge2" value="creates" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=1;exitY=0.75;entryX=0;entryY=0.5;" edge="1" parent="1" source="User" target="AvailabilityRequest">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- User -> RequestAssignment (acts as deliverer) -->
+        <mxCell id="edge3" value="acts as deliverer" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=0.25;exitY=1;entryX=0.25;entryY=0;" edge="1" parent="1" source="User" target="RequestAssignment">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- User -> AvailabilityResponse (acts as outlet owner) -->
+        <mxCell id="edge4" value="acts as outlet owner" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=0.75;exitY=1;entryX=0;entryY=0.25;" edge="1" parent="1" source="User" target="AvailabilityResponse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- DeliveryRequest -> Outlet (belongs to) -->
+        <mxCell id="edge5" value="belongs to" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=1;exitY=0.5;entryX=0.25;entryY=0;" edge="1" parent="1" source="DeliveryRequest" target="Outlet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- AvailabilityRequest -> Outlet (requested for) -->
+        <mxCell id="edge6" value="requested for" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=1;exitY=0.5;entryX=0.25;entryY=1;" edge="1" parent="1" source="AvailabilityRequest" target="Outlet">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- RequestAssignment -> DeliveryRequest (assigned via) BIG LEFT SWEEP -->
+        <mxCell id="edge7" value="assigned via" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=0;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="RequestAssignment" target="DeliveryRequest">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="110" y="530" />
+              <mxPoint x="110" y="60" />
+              <mxPoint x="480" y="60" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- DeliveryRequest -> RequestStatusHistory (status tracked in) BIG RIGHT SWEEP -->
+        <mxCell id="edge8" value="status tracked in" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=1;exitY=0.25;entryX=1;entryY=0.5;" edge="1" parent="1" source="DeliveryRequest" target="RequestStatusHistory">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="900" y="115" />
+              <mxPoint x="900" y="530" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- AvailabilityRequest -> AvailabilityResponse (responded by) -->
+        <mxCell id="edge9" value="responded by" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="AvailabilityRequest" target="AvailabilityResponse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- AvailabilityResponse -> RequestStatusHistory (triggers status update) -->
+        <mxCell id="edge10" value="triggers status update" style="endArrow=classic;html=1;edgeStyle=orthogonalEdgeStyle;labelBackgroundColor=default;exitX=1;exitY=0.75;entryX=0;entryY=0.75;" edge="1" parent="1" source="AvailabilityResponse" target="RequestStatusHistory">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

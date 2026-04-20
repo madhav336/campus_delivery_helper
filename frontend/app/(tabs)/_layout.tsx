@@ -4,6 +4,16 @@ import { useTheme } from "@/context/ThemeContext";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
+/**
+ * Returns a stable tabBarIcon renderer for a given Ionicons icon name.
+ * Defined outside the component to avoid re-creating functions on each render.
+ */
+function makeTabIcon(name: React.ComponentProps<typeof Ionicons>['name']) {
+  return ({ color, size }: { color: string; size: number }) => (
+    <Ionicons name={name} size={size} color={color} />
+  );
+}
+
 export default function TabLayout() {
   const { theme, userRole, loading } = useTheme();
   const router = useRouter();
@@ -80,9 +90,7 @@ export default function TabLayout() {
         options={{
           title: "Requests",
           href: userRole === "student" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="list-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("list-outline"),
         }}
       />
 
@@ -91,9 +99,7 @@ export default function TabLayout() {
         options={{
           title: "Create",
           href: userRole === "student" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-circle-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("add-circle-outline"),
         }}
       />
 
@@ -102,9 +108,7 @@ export default function TabLayout() {
         options={{
           title: "Activity",
           href: userRole === "student" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flash-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("flash-outline"),
         }}
       />
 
@@ -113,9 +117,7 @@ export default function TabLayout() {
         options={{
           title: "Board",
           href: userRole === "student" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="podium-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("podium-outline"),
         }}
       />
 
@@ -128,9 +130,7 @@ export default function TabLayout() {
             userRole === "student" || userRole === "outlet_owner"
               ? undefined
               : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="checkmark-circle-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("checkmark-circle-outline"),
         }}
       />
 
@@ -140,9 +140,7 @@ export default function TabLayout() {
         options={{
           title: "Analytics",
           href: userRole === "admin" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bar-chart-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("bar-chart-outline"),
         }}
       />
 
@@ -151,9 +149,7 @@ export default function TabLayout() {
         options={{
           title: "Users",
           href: userRole === "admin" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("people-outline"),
         }}
       />
 
@@ -162,9 +158,7 @@ export default function TabLayout() {
         options={{
           title: "Outlets",
           href: userRole === "admin" ? undefined : null,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="storefront-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("storefront-outline"),
         }}
       />
 
@@ -173,9 +167,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Me",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
+          tabBarIcon: makeTabIcon("person-outline"),
         }}
       />
     </Tabs>

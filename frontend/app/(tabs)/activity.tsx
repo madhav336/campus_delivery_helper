@@ -88,7 +88,7 @@ export default function ActivityScreen() {
         const data = await outlets.getAll();
         setOutletsList(data || []);
       } catch (error) {
-        console.warn("Failed to load outlets");
+        console.warn("Failed to load outlets:", error);
         setOutletsList([]);
       }
     };
@@ -115,6 +115,7 @@ export default function ActivityScreen() {
       setAllAvailabilities(ownAvailability);
       setUnacceptedRequests(unaccepted || []);
     } catch (error) {
+      console.error("Failed to load activity:", error);
       Alert.alert("Error", "Failed to load activity");
     } finally {
       setLoading(false);
@@ -139,6 +140,7 @@ export default function ActivityScreen() {
             Alert.alert("Success", "Deleted! ✅");
             loadData();
           } catch (error) {
+            console.error("Failed to delete delivery request:", error);
             Alert.alert("Error", "Failed to delete");
           }
         },
@@ -158,6 +160,7 @@ export default function ActivityScreen() {
             Alert.alert("Success", "Deleted! ✅");
             loadData();
           } catch (error) {
+            console.error("Failed to delete availability request:", error);
             Alert.alert("Error", "Failed to delete");
           }
         },
@@ -176,6 +179,7 @@ export default function ActivityScreen() {
             Alert.alert("Success", "Marked as completed! ✅");
             loadData();
           } catch (error) {
+            console.error("Failed to complete delivery:", error);
             Alert.alert("Error", "Failed to complete");
           }
         },
@@ -199,6 +203,7 @@ export default function ActivityScreen() {
       setRatingModalVisible(false);
       loadData();
     } catch (error) {
+      console.error("Failed to submit rating:", error);
       Alert.alert("Error", "Failed to submit rating");
     }
   };
@@ -402,8 +407,7 @@ export default function ActivityScreen() {
                       <Text style={[styles.feeText, { color: theme.primary }]}>₹{delivery.fee}</Text>
                     </View>
 
-                    {!delivery.requesterRating ||
-                    !delivery.requesterRating?.rating ? (
+                    {!delivery.requesterRating?.rating ? (
                       <Pressable
                         onPress={() => handleRateDelivery(delivery)}
                         style={[
@@ -580,7 +584,7 @@ export default function ActivityScreen() {
                       </View>
                     </Card>
                   ))}
-                {allRequests.filter((r) => r.status === "COMPLETED").length > 0 && (
+                {allRequests.some((r) => r.status === "COMPLETED") && (
                   <>
                     <Text
                       style={[
@@ -625,8 +629,7 @@ export default function ActivityScreen() {
                             </View>
                           </View>
 
-                          {!request.delivererRating ||
-                          !request.delivererRating?.rating ? (
+                          {!request.delivererRating?.rating ? (
                             <Pressable
                               onPress={() => handleRateDelivery(request)}
                               style={[

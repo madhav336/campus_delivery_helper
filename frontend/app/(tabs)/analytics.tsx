@@ -7,7 +7,6 @@ import {
   Alert,
   Pressable,
   RefreshControl,
-  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -72,14 +71,6 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [delivererSearch, setDelivererSearch] = useState("");
-  const [requesterSearch, setRequesterSearch] = useState("");
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadDashboard();
-    setRefreshing(false);
-  }, [loadDashboard]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -92,6 +83,12 @@ export default function AnalyticsScreen() {
       setLoading(false);
     }
   }, [days]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
+  }, [loadDashboard]);
 
   useEffect(() => {
     loadDashboard();
@@ -697,11 +694,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 13,
     marginBottom: 12,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
   },
   ratingRow: {
     flexDirection: "row",

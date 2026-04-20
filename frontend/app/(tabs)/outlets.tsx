@@ -53,9 +53,7 @@ export default function OutletsScreen() {
 
   useEffect(() => {
     const query = searchQuery.toLowerCase();
-    if (!query.trim()) {
-      setFilteredOutlets(outletsList);
-    } else {
+    if (query.trim()) {
       setFilteredOutlets(
         outletsList.filter((outlet) =>
           outlet.name?.toLowerCase().includes(query) ||
@@ -63,6 +61,8 @@ export default function OutletsScreen() {
           outlet.owner?.name?.toLowerCase().includes(query)
         )
       );
+    } else {
+      setFilteredOutlets(outletsList);
     }
   }, [searchQuery, outletsList]);
 
@@ -73,6 +73,7 @@ export default function OutletsScreen() {
       setOutletsList(data);
       setFilteredOutlets(data);
     } catch (error) {
+      console.error("Failed to fetch outlets:", error);
       Alert.alert("Error", "Failed to fetch outlets");
     } finally {
       setLoading(false);

@@ -55,9 +55,15 @@ export default function LeaderboardScreen() {
     }
   };
 
+  const getMedal = (index: number): string => {
+    if (index === 0) return "🥇";
+    if (index === 1) return "🥈";
+    if (index === 2) return "🥉";
+    return `#${index + 1}`;
+  };
+
   const renderRow = (item: LeaderboardEntry, index: number) => {
-    const medal =
-      index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`;
+    const medal = getMedal(index);
 
     return (
       <Card key={item.id}>

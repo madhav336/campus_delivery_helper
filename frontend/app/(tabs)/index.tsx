@@ -77,6 +77,7 @@ export default function RequestsScreen() {
       );
       setRequestsList(openRequests);
     } catch (error) {
+      console.error("Failed to load requests:", error);
       Alert.alert("Error", "Failed to load requests");
     } finally {
       setLoading(false);

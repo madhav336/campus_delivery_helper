@@ -53,6 +53,7 @@ export default function UsersScreen() {
       const data = await users.getAll();
       setUsersList((data.users || []) as UserItem[]);
     } catch (error) {
+      console.error("Failed to fetch users:", error);
       Alert.alert("Error", "Failed to fetch users");
     } finally {
       setLoading(false);
@@ -108,6 +109,7 @@ export default function UsersScreen() {
       closeEdit();
       fetchUsers();
     } catch (error) {
+      console.error("Failed to update user:", error);
       Alert.alert("Error", "Failed to update user");
     }
   };
@@ -127,6 +129,7 @@ export default function UsersScreen() {
               Alert.alert("Success", "User deleted");
               fetchUsers();
             } catch (error) {
+              console.error("Failed to delete user:", error);
               Alert.alert("Error", "Failed to delete user");
             }
           },

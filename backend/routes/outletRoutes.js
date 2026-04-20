@@ -3,8 +3,24 @@ const Outlet = require('../models/Outlet');
 const AvailabilityRequest = require('../models/AvailabilityRequest');
 const User = require('../models/User');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
+
+/**
+ * Updates outlet owner user fields (name, email, phone, password)
+ */
+async function updateOutletOwnerDetails(targetOwnerId, { ownerName, ownerEmail, ownerPhone, ownerPassword }) {
+  const ownerUpdateData = {};
+  if (ownerName) ownerUpdateData.name = ownerName;
+  if (ownerEmail) ownerUpdateData.email = ownerEmail.toLowerCase();
+  if (ownerPhone) ownerUpdateData.phone = ownerPhone;
+  if (ownerPassword) {
+    const salt = await bcrypt.genSalt(10);
+    ownerUpdateData.password = await bcrypt.hash(ownerPassword, salt);
+  }
+  await User.findByIdAndUpdate(targetOwnerId, ownerUpdateData);
+}
 
 /**
  * POST /api/outlets/cleanup
@@ -130,7 +146,6 @@ router.post('/', verifyToken, requireRole('admin'), async (req, res) => {
  */
 router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const bcrypt = require('bcryptjs');
     const { name, locationDescription, ownerId, ownerName, ownerEmail, ownerPhone, ownerPassword } = req.body;
     const updateData = {};
 
@@ -138,7 +153,7 @@ router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
     if (locationDescription) updateData.locationDescription = locationDescription;
 
     // Handle owner change or update
-    let targetOwnerId = ownerId;
+    let targetOwnerId;
     if (ownerId) {
       const owner = await User.findById(ownerId);
       if (!owner || owner.role !== 'outlet_owner') {
@@ -149,21 +164,12 @@ router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
     } else {
       // If no ownerId provided, use existing outlet's owner
       const existingOutlet = await Outlet.findById(req.params.id);
-      targetOwnerId = existingOutlet?.owner?._id || null;
+      targetOwnerId = existingOutlet?.owner?._id ?? null;
     }
 
     // Update owner details if provided
     if (targetOwnerId && (ownerName || ownerEmail || ownerPhone || ownerPassword)) {
-      const ownerUpdateData = {};
-      if (ownerName) ownerUpdateData.name = ownerName;
-      if (ownerEmail) ownerUpdateData.email = ownerEmail.toLowerCase();
-      if (ownerPhone) ownerUpdateData.phone = ownerPhone;
-      if (ownerPassword) {
-        const salt = await bcrypt.genSalt(10);
-        ownerUpdateData.password = await bcrypt.hash(ownerPassword, salt);
-      }
-
-      await User.findByIdAndUpdate(targetOwnerId, ownerUpdateData);
+      await updateOutletOwnerDetails(targetOwnerId, { ownerName, ownerEmail, ownerPhone, ownerPassword });
     }
 
     const outlet = await Outlet.findByIdAndUpdate(

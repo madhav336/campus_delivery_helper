@@ -177,7 +177,7 @@ async function getLeaderboard(limit = 10) {
  */
 router.get('/dashboard', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const dayCount = Math.max(1, Math.min(parseInt(req.query.days, 10) || 14, 90));
+    const dayCount = Math.max(1, Math.min(Number.parseInt(req.query.days, 10) || 14, 90));
     const today = startOfDay();
     const since = daysAgo(dayCount - 1);
 
@@ -361,7 +361,7 @@ router.get('/summary', verifyToken, requireRole('admin'), async (req, res) => {
  */
 router.get('/requests-over-time', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const days = parseInt(req.query.days) || 30;
+    const days = Number.parseInt(req.query.days) || 30;
     const startDate = daysAgo(days);
 
     const stats = await DailyStats.find({
@@ -385,7 +385,7 @@ router.get('/requests-over-time', verifyToken, requireRole('admin'), async (req,
  */
 router.get('/users-over-time', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const days = parseInt(req.query.days) || 30;
+    const days = Number.parseInt(req.query.days) || 30;
     const startDate = daysAgo(days);
 
     const stats = await DailyStats.find({

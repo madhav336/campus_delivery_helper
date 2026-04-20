@@ -41,7 +41,7 @@ export default function EditAvailabilityScreen() {
         const data = await outlets.getAll();
         setOutletsList(data || []);
       } catch (error) {
-        console.warn("Failed to load outlets");
+        console.warn("Failed to load outlets:", error);
       }
     };
     loadOutlets();
@@ -81,6 +81,7 @@ export default function EditAvailabilityScreen() {
       Alert.alert("Success", "Availability check updated! ✅");
       router.back();
     } catch (error) {
+      console.error("Failed to update availability check:", error);
       Alert.alert("Error", "Failed to update availability check");
     } finally {
       setLoading(false);

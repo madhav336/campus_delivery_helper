@@ -118,6 +118,10 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
     let query = {};
 
     if (role) {
+      const VALID_ROLES = ['student', 'outlet_owner', 'admin'];
+      if (!VALID_ROLES.includes(role)) {
+        return res.status(400).json({ message: 'Invalid role filter' });
+      }
       query.role = role;
     }
 

@@ -21,6 +21,11 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Reject non-string email to prevent NoSQL injection
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ message: 'Invalid input format' });
+    }
+
     // Check if user exists
     const existing = await User.findOne({ email });
     if (existing) {
@@ -117,6 +122,11 @@ router.post('/login', async (req, res) => {
     // Validation
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password required' });
+    }
+
+    // Reject non-string inputs to prevent NoSQL injection
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ message: 'Invalid input format' });
     }
 
     // Find user

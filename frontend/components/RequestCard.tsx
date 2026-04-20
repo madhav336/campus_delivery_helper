@@ -3,11 +3,11 @@ import { DeliveryRequest } from "@/types/deliveryRequest";
 import { useTheme } from "@/context/ThemeContext";
 
 interface RequestCardProps {
-  request: DeliveryRequest;
-  onDelete?: () => void;
-  onEdit?: () => void;
-  onAccept?: () => void;
-  onComplete?: () => void;
+  readonly request: DeliveryRequest;
+  readonly onDelete?: () => void;
+  readonly onEdit?: () => void;
+  readonly onAccept?: () => void;
+  readonly onComplete?: () => void;
 }
 
 export default function RequestCard({
@@ -25,11 +25,6 @@ export default function RequestCard({
   const accent = getColor(request.outlet);
   const status = request.status;
 
-  const getInitials = (text: string) => {
-    const words = text.split(" ");
-    if (words.length === 1) return words[0][0];
-    return words[0][0] + words[1][0];
-  };
 
   return (
     <View

@@ -16,7 +16,6 @@ import { users, auth } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
-import GradientButton from "@/components/ui/GradientButton";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
@@ -83,6 +82,7 @@ export default function ProfileScreen() {
       setEditing(false);
       loadProfile();
     } catch (error) {
+      console.error("Failed to update profile:", error);
       Alert.alert("Error", "Failed to update profile");
     }
   };
@@ -186,50 +186,7 @@ export default function ProfileScreen() {
             Contact Info
           </Text>
 
-          {!editing ? (
-            <>
-              <View style={styles.infoRow}>
-                <Text style={[styles.label, { color: theme.subtext }]}>
-                  Phone
-                </Text>
-                <Text style={[styles.value, { color: theme.text }]}>
-                  {phone || "Not set"}
-                </Text>
-              </View>
-
-              {userRole === "student" && (
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.subtext }]}>
-                    Hostel
-                  </Text>
-                  <Text style={[styles.value, { color: theme.text }]}>
-                    {hostel || "Not set"}
-                  </Text>
-                </View>
-              )}
-
-              {userRole === "outlet_owner" && (
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.subtext }]}>
-                    Outlet
-                  </Text>
-                  <Text style={[styles.value, { color: theme.text }]}>
-                    {profile?.outlet?.name || "Not set"}
-                  </Text>
-                </View>
-              )}
-
-              <Pressable
-                onPress={() => setEditing(true)}
-                style={[styles.editButton, { backgroundColor: theme.primary }]}
-              >
-                <Ionicons name="pencil" size={16} color="#fff" />
-                <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 8 }}>
-                  Edit
-                </Text>
-              </Pressable>
-            </>
-          ) : (
+          {editing ? (
             <>
               <Text style={[styles.label, { color: theme.text }]}>Phone</Text>
               <TextInput
@@ -285,6 +242,49 @@ export default function ProfileScreen() {
                   <Text style={{ color: "#fff", fontWeight: "600" }}>Save</Text>
                 </Pressable>
               </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={[styles.label, { color: theme.subtext }]}>
+                  Phone
+                </Text>
+                <Text style={[styles.value, { color: theme.text }]}>
+                  {phone || "Not set"}
+                </Text>
+              </View>
+
+              {userRole === "student" && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.label, { color: theme.subtext }]}>
+                    Hostel
+                  </Text>
+                  <Text style={[styles.value, { color: theme.text }]}>
+                    {hostel || "Not set"}
+                  </Text>
+                </View>
+              )}
+
+              {userRole === "outlet_owner" && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.label, { color: theme.subtext }]}>
+                    Outlet
+                  </Text>
+                  <Text style={[styles.value, { color: theme.text }]}>
+                    {profile?.outlet?.name || "Not set"}
+                  </Text>
+                </View>
+              )}
+
+              <Pressable
+                onPress={() => setEditing(true)}
+                style={[styles.editButton, { backgroundColor: theme.primary }]}
+              >
+                <Ionicons name="pencil" size={16} color="#fff" />
+                <Text style={{ color: "#fff", fontWeight: "600", marginLeft: 8 }}>
+                  Edit
+                </Text>
+              </Pressable>
             </>
           )}
         </Card>

@@ -2,9 +2,9 @@ import { Pressable, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/context/ThemeContext";
 
 type ButtonProps = {
-  title: string;
-  onPress: () => void;
-  variant?: "primary" | "outline" | "danger";
+  readonly title: string;
+  readonly onPress: () => void;
+  readonly variant?: "primary" | "outline" | "danger";
 };
 
 export default function Button({
