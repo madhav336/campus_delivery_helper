@@ -15,7 +15,6 @@ import { availability, outlets } from "@/services/api";
 import { useTheme } from "@/context/ThemeContext";
 import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
-import { Ionicons } from "@expo/vector-icons";
 
 interface AvailabilityRequest {
   _id: string;
@@ -65,7 +64,7 @@ export default function AvailabilityScreen() {
         const outletData = await outlets.getAll();
         setOutletsList(outletData || []);
       } catch (err) {
-        console.warn("Failed to load outlets");
+        console.warn("Failed to load outlets:", err);
         setOutletsList([]);
       }
     } catch (error) {

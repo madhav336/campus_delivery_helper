@@ -119,10 +119,11 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
 
     if (role) {
       const VALID_ROLES = ['student', 'outlet_owner', 'admin'];
-      if (!VALID_ROLES.includes(role)) {
+      const safeRole = String(role);
+      if (!VALID_ROLES.includes(safeRole)) {
         return res.status(400).json({ message: 'Invalid role filter' });
       }
-      query.role = role;
+      query.role = { $eq: safeRole };
     }
 
     const users = await User.find(query).select('-password');

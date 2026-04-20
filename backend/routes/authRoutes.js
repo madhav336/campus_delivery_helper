@@ -26,8 +26,8 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ message: 'Invalid input format' });
     }
 
-    // Check if user exists
-    const existing = await User.findOne({ email });
+    const safeEmail = String(email);
+    const existing = await User.findOne({ email: { $eq: safeEmail } });
     if (existing) {
       return res.status(409).json({ message: 'Email already registered' });
     }
@@ -129,8 +129,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Invalid input format' });
     }
 
-    // Find user
-    const user = await User.findOne({ email }).select('+password');
+    const safeEmail = String(email);
+    const user = await User.findOne({ email: { $eq: safeEmail } }).select('+password');
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }

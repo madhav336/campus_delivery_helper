@@ -115,7 +115,7 @@ router.post('/', verifyToken, requireRole('admin'), async (req, res) => {
 
     // Verify owner exists and is outlet_owner
     const owner = await User.findById(ownerId);
-    if (!owner || owner.role !== 'outlet_owner') {
+    if (owner?.role !== 'outlet_owner') {
       return res.status(400).json({ message: 'Invalid owner or owner is not an outlet owner' });
     }
 
@@ -156,7 +156,7 @@ router.put('/:id', verifyToken, requireRole('admin'), async (req, res) => {
     let targetOwnerId;
     if (ownerId) {
       const owner = await User.findById(ownerId);
-      if (!owner || owner.role !== 'outlet_owner') {
+      if (owner?.role !== 'outlet_owner') {
         return res.status(400).json({ message: 'Invalid owner or owner is not an outlet owner' });
       }
       updateData.owner = ownerId;

@@ -63,6 +63,75 @@ type DashboardData = {
   apiUsage: any[];
 };
 
+const TrendLineChart = ({ data, color, maxValue, width = 280, theme }: { data: number[]; color: string; maxValue: number; width?: number; theme: any }) => {
+  const height = 80;
+  const padding = 8;
+  if (data.length === 0) return <Text style={{ color: theme.subtext }}>No data</Text>;
+  const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
+  const dots = data.map((val, i) => ({
+    x: padding + stepX * i,
+    y: height - padding - (val / Math.max(maxValue, 1)) * (height - padding * 2),
+  }));
+  const path = dots.map((dot, i) => `${i === 0 ? "M" : "L"}${dot.x.toFixed(0)},${dot.y.toFixed(0)}`).join(" ");
+  return (
+    <Svg width={width} height={height}>
+      <Line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke={theme.border} strokeWidth={1} />
+      <Path d={path} stroke={color} strokeWidth={2} fill="none" />
+      {dots.map((dot, i) => (
+        <Circle key={`t-${dot.x}-${dot.y}`} cx={dot.x} cy={dot.y} r={2} fill={color} />
+      ))}
+    </Svg>
+  );
+};
+
+const CurrentDayPie = ({ dashboard, theme }: { dashboard: DashboardData | null; theme: any }) => {
+  if (!dashboard) return null;
+  const delivery = dashboard.summary.today.deliveryRequests;
+  const availability = dashboard.summary.today.availabilityRequests;
+  const total = delivery + availability;
+  if (total === 0) {
+    return <Text style={{ color: theme.subtext, textAlign: "center", marginVertical: 20 }}>No requests today</Text>;
+  }
+  const deliveryPercent = (delivery / total) * 100;
+  const radius = 45;
+  const center = 60;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <View style={{ alignItems: "center", marginVertical: 16 }}>
+      <View style={{ width: 140, height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
+        <Svg width={140} height={140} style={{ position: "absolute" }}>
+          <Circle cx={center} cy={center} r={radius} fill="none" stroke="#4f46e5" strokeWidth={18} strokeDasharray={`${(deliveryPercent / 100) * circumference} ${circumference}`} transform={`rotate(-90 ${center} ${center})`} />
+          <Circle cx={center} cy={center} r={radius} fill="none" stroke="#10b981" strokeWidth={18} strokeDasharray={`${((100 - deliveryPercent) / 100) * circumference} ${circumference}`} strokeDashoffset={-((deliveryPercent / 100) * circumference)} transform={`rotate(-90 ${center} ${center})`} />
+        </Svg>
+      </View>
+    </View>
+  );
+};
+
+const RoleDistributionPie = ({ dashboard, theme }: { dashboard: DashboardData | null; theme: any }) => {
+  if (!dashboard) return null;
+  const students = dashboard.summary.roleDistribution.student;
+  const outlets = dashboard.summary.roleDistribution.outlet_owner;
+  const total = students + outlets;
+  if (total === 0) {
+    return <Text style={{ color: theme.subtext, textAlign: "center", marginVertical: 20 }}>No users</Text>;
+  }
+  const studentPercent = (students / total) * 100;
+  const radius = 45;
+  const center = 60;
+  const circumference = 2 * Math.PI * radius;
+  return (
+    <View style={{ alignItems: "center", marginVertical: 16 }}>
+      <View style={{ width: 140, height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
+        <Svg width={140} height={140} style={{ position: "absolute" }}>
+          <Circle cx={center} cy={center} r={radius} fill="none" stroke="#7c3aed" strokeWidth={18} strokeDasharray={`${(studentPercent / 100) * circumference} ${circumference}`} transform={`rotate(-90 ${center} ${center})`} />
+          <Circle cx={center} cy={center} r={radius} fill="none" stroke="#f59e0b" strokeWidth={18} strokeDasharray={`${((100 - studentPercent) / 100) * circumference} ${circumference}`} strokeDashoffset={-((studentPercent / 100) * circumference)} transform={`rotate(-90 ${center} ${center})`} />
+        </Svg>
+      </View>
+    </View>
+  );
+};
+
 const DAY_OPTIONS = [7, 14, 30];
 
 export default function AnalyticsScreen() {
@@ -105,123 +174,6 @@ export default function AnalyticsScreen() {
         point.newUsers,
     }));
   }, [dashboard]);
-
-  const TrendLineChart = ({ data, color, maxValue, width = 280 }: { data: number[]; color: string; maxValue: number; width?: number }) => {
-    const height = 80;
-    const padding = 8;
-
-    if (data.length === 0) return <Text style={{ color: theme.subtext }}>No data</Text>;
-
-    const stepX = data.length > 1 ? (width - padding * 2) / (data.length - 1) : 0;
-    const dots = data.map((val, i) => ({
-      x: padding + stepX * i,
-      y: height - padding - (val / Math.max(maxValue, 1)) * (height - padding * 2),
-    }));
-
-    const path = dots.map((dot, i) => `${i === 0 ? "M" : "L"}${dot.x.toFixed(0)},${dot.y.toFixed(0)}`).join(" ");
-
-    return (
-      <Svg width={width} height={height}>
-        <Line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke={theme.border} strokeWidth={1} />
-        <Path d={path} stroke={color} strokeWidth={2} fill="none" />
-        {dots.map((dot, i) => (
-          <Circle key={i} cx={dot.x} cy={dot.y} r={2} fill={color} />
-        ))}
-      </Svg>
-    );
-  };
-
-  const CurrentDayPie = () => {
-    if (!dashboard) return null;
-    const delivery = dashboard.summary.today.deliveryRequests;
-    const availability = dashboard.summary.today.availabilityRequests;
-    const total = delivery + availability;
-
-    if (total === 0) {
-      return <Text style={{ color: theme.subtext, textAlign: "center", marginVertical: 20 }}>No requests today</Text>;
-    }
-
-    const deliveryPercent = (delivery / total) * 100;
-    const radius = 45;
-    const center = 60;
-    const circumference = 2 * Math.PI * radius;
-
-    return (
-      <View style={{ alignItems: "center", marginVertical: 16 }}>
-        <View style={{ width: 140, height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
-          <Svg width={140} height={140} style={{ position: "absolute" }}>
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="#4f46e5"
-              strokeWidth={18}
-              strokeDasharray={`${(deliveryPercent / 100) * circumference} ${circumference}`}
-              transform={`rotate(-90 ${center} ${center})`}
-            />
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="#10b981"
-              strokeWidth={18}
-              strokeDasharray={`${((100 - deliveryPercent) / 100) * circumference} ${circumference}`}
-              strokeDashoffset={-((deliveryPercent / 100) * circumference)}
-              transform={`rotate(-90 ${center} ${center})`}
-            />
-          </Svg>
-        </View>
-      </View>
-    );
-  };
-
-  const RoleDistributionPie = () => {
-    if (!dashboard) return null;
-    const students = dashboard.summary.roleDistribution.student;
-    const outlets = dashboard.summary.roleDistribution.outlet_owner;
-    const total = students + outlets;
-
-    if (total === 0) {
-      return <Text style={{ color: theme.subtext, textAlign: "center", marginVertical: 20 }}>No users</Text>;
-    }
-
-    const studentPercent = (students / total) * 100;
-    const radius = 45;
-    const center = 60;
-    const circumference = 2 * Math.PI * radius;
-
-    return (
-      <View style={{ alignItems: "center", marginVertical: 16 }}>
-        <View style={{ width: 140, height: 140, justifyContent: "center", alignItems: "center", position: "relative" }}>
-          <Svg width={140} height={140} style={{ position: "absolute" }}>
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="#7c3aed"
-              strokeWidth={18}
-              strokeDasharray={`${(studentPercent / 100) * circumference} ${circumference}`}
-              transform={`rotate(-90 ${center} ${center})`}
-            />
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius}
-              fill="none"
-              stroke="#f59e0b"
-              strokeWidth={18}
-              strokeDasharray={`${((100 - studentPercent) / 100) * circumference} ${circumference}`}
-              strokeDashoffset={-((studentPercent / 100) * circumference)}
-              transform={`rotate(-90 ${center} ${center})`}
-            />
-          </Svg>
-        </View>
-      </View>
-    );
-  };
 
   if (loading) {
     return (
@@ -287,7 +239,7 @@ export default function AnalyticsScreen() {
         {/* USER ROLE DISTRIBUTION PIE */}
         <Card>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>User Distribution</Text>
-          <RoleDistributionPie />
+          <RoleDistributionPie dashboard={dashboard} theme={theme} />
           <View style={styles.pieLegend}>
             <View style={styles.pieLegendItem}>
               <View style={[styles.pieLegendDot, { backgroundColor: "#7c3aed" }]} />
@@ -303,7 +255,7 @@ export default function AnalyticsScreen() {
         {/* TODAY'S DELIVERY VS AVAILABILITY PIE */}
         <Card>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Today&apos;s Request Mix</Text>
-          <CurrentDayPie />
+          <CurrentDayPie dashboard={dashboard} theme={theme} />
           <View style={styles.pieLegend}>
             <View style={styles.pieLegendItem}>
               <View style={[styles.pieLegendDot, { backgroundColor: "#4f46e5" }]} />
@@ -350,6 +302,7 @@ export default function AnalyticsScreen() {
               data={trendPoints.map((p) => p.newUsers)}
               color="#4f46e5"
               maxValue={Math.max(...trendPoints.map((p) => p.newUsers), 1)}
+              theme={theme}
             />
           ) : (
             <Text style={{ color: theme.subtext }}>No data</Text>
@@ -369,6 +322,7 @@ export default function AnalyticsScreen() {
                   })}
                   color="#10b981"
                   maxValue={Math.max(dashboard.summary.totalOutlets, 1)}
+                  theme={theme}
                 />
               </View>
               <View style={styles.pieLegend}>
@@ -400,6 +354,7 @@ export default function AnalyticsScreen() {
                           color="#4f46e5"
                           width={130}
                           maxValue={maxVal}
+                          theme={theme}
                         />
                         <View style={[styles.miniLegend, { marginTop: 4 }]}>
                           <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
@@ -429,6 +384,7 @@ export default function AnalyticsScreen() {
                           color="#10b981"
                           width={130}
                           maxValue={maxVal}
+                          theme={theme}
                         />
                         <View style={[styles.miniLegend, { marginTop: 4 }]}>
                           <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
@@ -465,6 +421,7 @@ export default function AnalyticsScreen() {
                           color="#f59e0b"
                           width={130}
                           maxValue={maxVal}
+                          theme={theme}
                         />
                         <View style={[styles.miniLegend, { marginTop: 4 }]}>
                           <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>
@@ -494,6 +451,7 @@ export default function AnalyticsScreen() {
                           color="#8b5cf6"
                           width={130}
                           maxValue={maxVal}
+                          theme={theme}
                         />
                         <View style={[styles.miniLegend, { marginTop: 4 }]}>
                           <Text style={{ color: theme.subtext, fontSize: 9 }}>Max: {maxVal}</Text>

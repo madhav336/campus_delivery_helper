@@ -10,7 +10,7 @@ const router = express.Router();
  * Escapes special regex characters to prevent ReDoS attacks
  */
 function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -34,12 +34,13 @@ async function buildRequestQuery(filter, userId, outlet, minFee, maxFee) {
   const query = { status: 'OPEN', requestedBy: { $ne: userId }, isExpiredPending: false };
 
   if (outlet) {
-    const escapedOutlet = escapeRegex(outlet);
-    const outletDoc = await Outlet.findOne({ name: new RegExp(escapedOutlet, 'i') });
+    const safeOutletString = String(outlet);
+    const escapedOutlet = escapeRegex(safeOutletString);
+    const outletDoc = await Outlet.findOne({ name: { $regex: escapedOutlet, $options: 'i' } });
     if (outletDoc) {
       query.outlet = outletDoc._id;
     } else {
-      query.outlet = new RegExp('^' + escapedOutlet + '$', 'i');
+      query.outlet = { $regex: '^' + escapedOutlet + '$', $options: 'i' };
     }
   }
 

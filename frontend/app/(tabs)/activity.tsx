@@ -20,6 +20,12 @@ import TopBar from "@/components/ui/TopBar";
 import Card from "@/components/ui/Card";
 import { Ionicons } from "@expo/vector-icons";
 
+const getModeLabel = (m: string) => {
+  if (m === "deliveries") return "Deliveries";
+  if (m === "requests") return "Requests";
+  return "Availability";
+};
+
 interface DeliveryRequest {
   _id: string;
   itemDescription: string;
@@ -246,11 +252,7 @@ export default function ActivityScreen() {
                 },
               ]}
             >
-              {m === "deliveries"
-                ? "Deliveries"
-                : m === "requests"
-                ? "Requests"
-                : "Availability"}
+              {getModeLabel(m)}
             </Text>
           </Pressable>
         ))}
@@ -407,7 +409,16 @@ export default function ActivityScreen() {
                       <Text style={[styles.feeText, { color: theme.primary }]}>₹{delivery.fee}</Text>
                     </View>
 
-                    {!delivery.requesterRating?.rating ? (
+                    {delivery.requesterRating?.rating ? (
+                      <Text
+                        style={[
+                          styles.subtext,
+                          { color: "#10b981", marginTop: 8, fontWeight: "600" },
+                        ]}
+                      >
+                        ⭐ Rated {delivery.requesterRating.rating}/5
+                      </Text>
+                    ) : (
                       <Pressable
                         onPress={() => handleRateDelivery(delivery)}
                         style={[
@@ -426,15 +437,6 @@ export default function ActivityScreen() {
                           Rate Requester
                         </Text>
                       </Pressable>
-                    ) : (
-                      <Text
-                        style={[
-                          styles.subtext,
-                          { color: "#10b981", marginTop: 8, fontWeight: "600" },
-                        ]}
-                      >
-                        ⭐ Rated {delivery.requesterRating.rating}/5
-                      </Text>
                     )}
                   </Card>
                 ))
@@ -629,7 +631,16 @@ export default function ActivityScreen() {
                             </View>
                           </View>
 
-                          {!request.delivererRating?.rating ? (
+                          {request.delivererRating?.rating ? (
+                            <Text
+                              style={[
+                                styles.subtext,
+                                { color: theme.subtext, marginTop: 8 },
+                              ]}
+                            >
+                              ⭐ Rated {request.delivererRating.rating}/5
+                            </Text>
+                          ) : (
                             <Pressable
                               onPress={() => handleRateDelivery(request)}
                               style={[
@@ -648,15 +659,6 @@ export default function ActivityScreen() {
                                 Rate Deliverer
                               </Text>
                             </Pressable>
-                          ) : (
-                            <Text
-                              style={[
-                                styles.subtext,
-                                { color: theme.subtext, marginTop: 8 },
-                              ]}
-                            >
-                              ⭐ Rated {request.delivererRating.rating}/5
-                            </Text>
                           )}
                         </Card>
                       ))}

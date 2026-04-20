@@ -89,7 +89,7 @@ router.get('/pending/all', verifyToken, requireRole('outlet_owner'), async (req,
   try {
     const user = await User.findById(req.user.userId).populate('outletId');
 
-    if (!user || !user.outletId) {
+    if (!user?.outletId) {
       return res.json({ requests: [] });
     }
 

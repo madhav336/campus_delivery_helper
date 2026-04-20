@@ -36,7 +36,7 @@ export function IconSymbol({
   readonly color: string | OpaqueColorValue;
   readonly style?: StyleProp<TextStyle>;
   // weight is accepted for API parity with iOS variant but unused on Android/web
-  readonly weight?: SymbolWeight;
+  readonly weight?: SymbolWeight; // NOSONAR
 }) {
   return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
 }

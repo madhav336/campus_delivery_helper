@@ -28,6 +28,55 @@ interface Outlet {
   locationDescription: string;
 }
 
+const loadOutletsLogic = async (setLoadingOutlets: any, setOutletsList: any) => {
+  try {
+    setLoadingOutlets(true);
+    const data = await outlets.getAll();
+    setOutletsList(data);
+  } catch (error) {
+    console.warn("Failed to load outlets:", error);
+    setOutletsList([]);
+  } finally {
+    setLoadingOutlets(false);
+  }
+};
+
+const submitDelivery = async (p: any) => {
+  if (!p.valid) {
+    Alert.alert("Validation", "Please fill all delivery fields");
+    return;
+  }
+  try {
+    p.setLoading(true);
+    await requests.create(p.item, p.outlet, p.hostel, Number(p.fee));
+    Alert.alert("Success", "Delivery request created! ✅");
+    p.reset();
+    p.router.push("/(tabs)");
+  } catch (error: any) {
+    Alert.alert("Error", error?.message || "Failed to create delivery request");
+  } finally {
+    p.setLoading(false);
+  }
+};
+
+const submitAvailability = async (p: any) => {
+  if (!p.valid) {
+    Alert.alert("Validation", "Please fill all availability fields");
+    return;
+  }
+  try {
+    p.setLoading(true);
+    await availability.create(p.item, p.outlet._id);
+    Alert.alert("Success", "Availability request created! ✅");
+    p.reset();
+    p.router.push("/(tabs)/activity");
+  } catch (error: any) {
+    Alert.alert("Error", error?.message || "Failed to create availability request");
+  } finally {
+    p.setLoading(false);
+  }
+};
+
 export default function CreateScreen() {
   const router = useRouter();
   const { theme } = useTheme();
@@ -55,16 +104,7 @@ export default function CreateScreen() {
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   const loadOutlets = useCallback(async () => {
-    try {
-      setLoadingOutlets(true);
-      const data = await outlets.getAll();
-      setOutletsList(data);
-    } catch (error) {
-      // Silently fail - outlets are only needed for availability mode
-      setOutletsList([]);
-    } finally {
-      setLoadingOutlets(false);
-    }
+    await loadOutletsLogic(setLoadingOutlets, setOutletsList);
   }, []);
 
   useFocusEffect(
@@ -84,63 +124,41 @@ export default function CreateScreen() {
     deliveryItem && finalDeliveryOutlet && hostel && Number(fee) > 0;
 
   const handleDeliverySubmit = async () => {
-    if (!deliveryValid) {
-      Alert.alert("Validation", "Please fill all delivery fields");
-      return;
-    }
-
-    try {
-      setDeliveryLoading(true);
-      await requests.create(
-        deliveryItem,
-        finalDeliveryOutlet,
-        hostel,
-        Number(fee)
-      );
-
-      Alert.alert("Success", "Delivery request created! ✅");
-      setDeliveryItem("");
-      setDeliveryOutlet("");
-      setDeliveryCustomOutlet("");
-      setHostel("");
-      setFee("");
-
-      router.push("/(tabs)");
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "Failed to create delivery request");
-    } finally {
-      setDeliveryLoading(false);
-    }
+    await submitDelivery({
+      valid: deliveryValid,
+      item: deliveryItem,
+      outlet: finalDeliveryOutlet,
+      hostel,
+      fee,
+      setLoading: setDeliveryLoading,
+      router,
+      reset: () => {
+        setDeliveryItem("");
+        setDeliveryOutlet("");
+        setDeliveryCustomOutlet("");
+        setHostel("");
+        setFee("");
+      }
+    });
   };
 
   // ===== AVAILABILITY CREATE =====
   const availabilityValid = availabilityItem && availabilityOutlet;
 
   const handleAvailabilitySubmit = async () => {
-    if (!availabilityValid) {
-      Alert.alert("Validation", "Please fill all availability fields");
-      return;
-    }
-
-    try {
-      setAvailabilityLoading(true);
-      await availability.create(availabilityItem, availabilityOutlet._id);
-
-      Alert.alert("Success", "Availability request created! ✅");
-      setAvailabilityItem("");
-      setAvailabilityOutlet(null);
-      setAvailOutletSearch("");
-      setShowAvailOutletDropdown(false);
-
-      router.push("/(tabs)/activity");
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error?.message || "Failed to create availability request"
-      );
-    } finally {
-      setAvailabilityLoading(false);
-    }
+    await submitAvailability({
+      valid: availabilityValid,
+      item: availabilityItem,
+      outlet: availabilityOutlet,
+      setLoading: setAvailabilityLoading,
+      router,
+      reset: () => {
+        setAvailabilityItem("");
+        setAvailabilityOutlet(null);
+        setAvailOutletSearch("");
+        setShowAvailOutletDropdown(false);
+      }
+    });
   };
 
   if (loadingOutlets) {
