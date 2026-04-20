@@ -14,11 +14,8 @@ connectDB();
 const app = express();
 
 // ===== Middlewares =====
-const mongoSanitize = require('express-mongo-sanitize');
 app.use(cors());
 app.use(express.json());
-// Sanitize all incoming req.body, req.query, and req.params against NoSQL Injection
-app.use(mongoSanitize());
 
 // Activity logging middleware - logs every API request
 app.use(async (req, res, next) => {
